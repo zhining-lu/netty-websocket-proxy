@@ -33,4 +33,5 @@ java -jar netty-websocket-proxy-x.x.x.jar -c --conf="conf/config-example-client.
 ## TODO
 * [ ] performance optimization
 * [ ] rate limit
+* [ ] user management
 
