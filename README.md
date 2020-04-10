@@ -24,7 +24,7 @@ java -jar netty-websocket-proxy-x.x.x.jar -c --conf="conf/config-example-client.
 ```
 
 ## Config file as python port
-[Create configuration file and run](https://github.com/shadowsocks/shadowsocks/wiki/Configuration-via-Config-File)
+* [ ] [Create configuration file and run](none)
 
 # Build
 1. import as maven project
