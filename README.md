@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # websocket-proxy-netty
 A  implementation of Websocket-proxy in Java base on netty4 framework.
 
@@ -34,7 +33,4 @@ java -jar netty-websocket-proxy-x.x.x.jar -c --conf="conf/config-example-client.
 ## TODO
 * [ ] performance optimization
 * [ ] rate limit
-=======
-# netty-websocket-proxy
-A websocket proxy base netty 
->>>>>>> fc27bb296fa6d59d5894593a06045d37b64fda5b
+
