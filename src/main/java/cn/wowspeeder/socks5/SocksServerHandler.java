@@ -35,7 +35,7 @@ public final class SocksServerHandler extends SimpleChannelInboundHandler<SocksM
                 } else if (socksRequest instanceof Socks5CommandRequest) {
                     Socks5CommandRequest socks5CmdRequest = (Socks5CommandRequest) socksRequest;
                     if (socks5CmdRequest.type() == Socks5CommandType.CONNECT) {
-//                        ctx.pipeline().addLast(new SocksServerConnectHandler());
+//                      ctx.pipeline().addLast(new SocksServerConnectHandler());
                         ctx.pipeline().remove(this);
                         //ss-local just res SUCCESS
                         ctx.channel().writeAndFlush(new DefaultSocks5CommandResponse(
