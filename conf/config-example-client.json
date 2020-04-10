@@ -1,0 +1,8 @@
+{
+  "server": "22.22.22.22",
+  "port_password": {
+    "80": "889900"
+  },
+  "local_address": "0.0.0.0",
+  "local_port": 18080
+}

@@ -1,0 +1,5 @@
+/logs/
+/.idea/
+/target/
+.iml
+*.log

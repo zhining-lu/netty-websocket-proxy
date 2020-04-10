@@ -1,0 +1,8 @@
+{
+  "server": "0.0.0.0",
+  "port_password": {
+    "443": "889900"
+  },
+  "local_address": "0.0.0.0",
+  "local_port":1085
+}
