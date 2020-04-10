@@ -46,7 +46,7 @@ public final class SocksServerHandler extends SimpleChannelInboundHandler<SocksM
 
                         ctx.channel().attr(SWCommon.REMOTE_DES_SOCKS5).set(socks5CmdRequest);
 
-//                        ctx.fireChannelRead(socksRequest);
+//                      ctx.fireChannelRead(socksRequest);
 
                     } else if (socks5CmdRequest.type() == Socks5CommandType.UDP_ASSOCIATE) {
                         ctx.pipeline().remove(this);
