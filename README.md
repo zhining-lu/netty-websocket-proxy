@@ -14,11 +14,11 @@ A  implementation of Websocket-proxy in Java base on netty4 framework.
 1. download netty-websocket-proxy-x.x.x-bin.zip
 2. unzip netty-websocket-proxy-x.x.x-bin.zip
 3. run
-#### as ssserver
+#### as swserver
 ```
 java -jar netty-websocket-proxy-x.x.x.jar -s -conf="conf/config-example-server.json"
 ```
-#### as ssclient
+#### as swclient
 ```
 java -jar netty-websocket-proxy-x.x.x.jar -c --conf="conf/config-example-client.json"
 ```
