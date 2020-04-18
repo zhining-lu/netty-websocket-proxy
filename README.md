@@ -20,7 +20,7 @@ java -jar netty-websocket-proxy-x.x.x.jar -s -conf="conf/config-example-server.j
 ```
 #### as swclient
 ```
-java -jar netty-websocket-proxy-x.x.x.jar -c --conf="conf/config-example-client.json"
+java -jar netty-websocket-proxy-x.x.x.jar -c -conf="conf/config-example-client.json"
 ```
   Note: After the client service starts, you can use Google Chrome and install the SwitchyOmega plug-in to surf the Internet
 ## Config file as python port
