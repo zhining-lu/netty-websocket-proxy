@@ -68,8 +68,9 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
             Base64Encrypt base64 = Base64Encrypt.getInstance(password);
 
             String url = "ws://"+ssServer.getHostString()+":"+ssServer.getPort()+"/websocket?token="+ base64.getEncString(remoteAddr.dstAddr()+":"+remoteAddr.dstPort());
-            logger.info("============"+ remoteAddr.dstAddr() +"====" + url);
-            URI uri = new URI(url);
+            //If the base64 encoding exceeds 76 characters, it will wrap, replace \n or \r in base64 encoding
+            logger.info("============"+ remoteAddr.dstAddr() +"====" + url.replaceAll("\r|\n",""));
+            URI uri = new URI(url.replaceAll("\r|\n",""));
 
             final SslContext sslCtx = getSslContext(uri);
 
