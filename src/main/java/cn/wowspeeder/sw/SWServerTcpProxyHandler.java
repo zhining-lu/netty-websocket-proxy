@@ -31,6 +31,7 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
 
     @Override
     protected void channelRead0(ChannelHandlerContext clientCtx, ByteBuf msg) throws Exception {
+
         if (this.clientChannel == null) {
             this.clientChannel = clientCtx.channel();
         }
@@ -48,8 +49,9 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
             proxyClient.group(clientChannel.eventLoop()).channel(NioSocketChannel.class)
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 60 * 1000)
                     .option(ChannelOption.SO_KEEPALIVE, true)
-                    .option(ChannelOption.SO_RCVBUF, 32 * 1024)// 读缓冲区为32k
-                    .option(ChannelOption.TCP_NODELAY, true)
+                    .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 读缓冲区为2M
+                    .option(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
+                    .option(ChannelOption.TCP_NODELAY, false)
                     .handler(
                             new ChannelInitializer<Channel>() {
                                 @Override

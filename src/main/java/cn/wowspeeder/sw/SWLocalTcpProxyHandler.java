@@ -80,15 +80,16 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
             final WebSocketClientHandler handler =
                     new WebSocketClientHandler(
                             WebSocketClientHandshakerFactory.newHandshaker(
-                                    uri, WebSocketVersion.V13, null, true, new DefaultHttpHeaders()));
+                                    uri, WebSocketVersion.V13, null, true,new DefaultHttpHeaders(), 65536 * 5));
 
 
             proxyClient = new Bootstrap();//
             proxyClient.group(clientChannel.eventLoop()).channel(NioSocketChannel.class)
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 60 * 1000)
                     .option(ChannelOption.SO_KEEPALIVE, true)
-                    .option(ChannelOption.SO_RCVBUF, 32 * 1024)// 读缓冲区为32k
-                    .option(ChannelOption.TCP_NODELAY, true)
+                    .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
+                    .option(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
+                    .option(ChannelOption.TCP_NODELAY, false)
                     .handler(
                             new ChannelInitializer<Channel>() {
                                 @Override
@@ -113,7 +114,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                     }
 
                                     pipeline.addLast(new HttpClientCodec())
-                                            .addLast(new HttpObjectAggregator(8192))
+                                            .addLast(new HttpObjectAggregator(65536 * 5))
                                             .addLast(WebSocketClientCompressionHandler.INSTANCE)
                                             .addLast(handler)
                                             .addLast(new WebSocketLocalFrameHandler());

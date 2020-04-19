@@ -54,8 +54,11 @@ public class SWLocal {
 
         //local socks5  server ,tcp
         tcpBootstrap.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class)
-                .option(ChannelOption.SO_RCVBUF, 32 * 1024)// 读缓冲区为32k
+                .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
+                .childOption(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
+                .childOption(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
+                .childOption(ChannelOption.TCP_NODELAY, false)
                 .childHandler(new ChannelInitializer<NioSocketChannel>() {
 
                     @Override
