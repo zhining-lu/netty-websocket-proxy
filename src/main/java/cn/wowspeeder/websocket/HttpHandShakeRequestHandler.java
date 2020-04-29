@@ -28,14 +28,14 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                 ctx.fireChannelRead(msg);
                 return;
             }
-            // parse args get targetHost and targetPort
+            // parse args to get targetHost and targetPort
             String[] s = uri.split("\\?");
             switch (s.length){
                 case 1:
                     //
                     throw new UnsupportedOperationException("url args not right please check ");
                 case 2:
-                    //reset uri, remove the part after "?"
+                    //remove the part after ? and reset uri for request
                     // uri = /websocket?target=123.456.44.7:8080
                     request.setUri(s[0]);
                     String token = s[1];
@@ -61,17 +61,17 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                         int port = Integer.parseInt(m.group(2));
                         ctx.channel().attr(SWCommon.REMOTE_DES).set(new InetSocketAddress(host, port));
                     }else {
-                        logger.error("may by password is not right");
-                        throw new UnsupportedOperationException("may by password is not right");
+                        logger.error("may be password is not right");
+                        throw new UnsupportedOperationException("may be password is not right");
                     }
 
                     break;
                 default:
-                    logger.warn("'?' More than one in url: {}", uri);
+                    logger.warn("More than one ? in url: {}", uri);
                     throw new UnsupportedOperationException("url args not right please check ");
             }
         }
-        //remove this pipline, bacause only one HttpReqest in In one websocket request
+        //remove this pipline, bacause only one HttpReqest in In one websocket request process
 
         ctx.fireChannelRead(msg);
 //        ctx.pipeline().remove(this);
