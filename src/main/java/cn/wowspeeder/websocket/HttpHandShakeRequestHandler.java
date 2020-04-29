@@ -35,7 +35,7 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                     //
                     throw new UnsupportedOperationException("url args not right please check ");
                 case 2:
-                    //remove the part after ? and reset uri for request
+                    //remove the part after ? and reset uri
                     // uri = /websocket?target=123.456.44.7:8080
                     request.setUri(s[0]);
                     String token = s[1];
