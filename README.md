@@ -33,3 +33,5 @@ java -jar netty-websocket-proxy-x.x.x.jar -c -conf="conf/config-example-client.j
 * [ ] rate limit
 * [ ] user management
 * [ ] android client
+## Date flow
+![image](https://img-blog.csdnimg.cn/2020051017110683.png)
