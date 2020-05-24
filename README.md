@@ -31,5 +31,5 @@ java -jar netty-websocket-proxy-x.x.x.jar -c -conf="conf/config-example-client.j
 ## TODO
 * [ ] performance optimization
 * [ ] android client
-## Date flow
+## Data flow
 ![image](https://img-blog.csdnimg.cn/2020051017110683.png)
