@@ -22,7 +22,7 @@ java -jar netty-websocket-proxy-x.x.x.jar -s -conf="conf/config-example-server.j
 ```
 java -jar netty-websocket-proxy-x.x.x.jar -c -conf="conf/config-example-client.json"
 ```
-  Note: After the client service starts, you can use Google Chrome and install the SwitchyOmega plug-in to surf the Internet
+  Note: You can also use the command under sbin to start the service. After the service starts, you can use Google Chrome and install the SwitchyOmega plug-in to surf the Internet
 
 # Build
 1. import as maven project
