@@ -1,5 +1,5 @@
 @echo off
-taskkill -f -t -im javaw.exe > null
+taskkill -f -t -im javaw.exe >nul 2>nul
 cd ../
 echo Client service is starting ...
 echo.
