@@ -19,7 +19,7 @@
 		<!-- 把项目的脚本文件目录（ src/main/scripts ）中的启动脚本文件，打包进zip文件的跟目录 -->
 		<fileSet>
 			<directory>sbin</directory>
-			<outputDirectory></outputDirectory>
+			<outputDirectory>sbin</outputDirectory>
 			<includes>
 				<include>*</include>
 			</includes>
@@ -42,7 +42,7 @@
 		<!-- 把项目自己编译出来的jar文件，打包进zip文件的根目录 -->
 		<fileSet>
 			<directory>${project.build.directory}</directory>
-			<outputDirectory></outputDirectory>
+			<outputDirectory>lib</outputDirectory>
 			<includes>
 				<include>*.jar</include>
 			</includes>
