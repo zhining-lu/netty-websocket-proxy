@@ -3,7 +3,7 @@ taskkill -f -t -im javaw.exe > null
 cd ../
 echo Client service is starting ...
 echo.
-start javaw -Xms512m -Xmx512m -jar ./lib/netty-websocket-proxy-1.3.1.jar -c -conf="./conf/config-example-client.json"
+start javaw -Xms512m -Xmx512m -jar ./lib/netty-websocket-proxy-1.3.2.jar -c -conf="./conf/config-example-client.json"
 echo Client service is started.
 echo. & pause
 exit

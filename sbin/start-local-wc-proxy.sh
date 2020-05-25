@@ -6,4 +6,4 @@ basename=`basename $currpath`
 if [ "$basename" = "sbin" ];then
 cd ../
 fi
-nohup java -Xms512m -Xmx512m -jar ./lib/netty-websocket-proxy-1.3.1.jar -c -conf="./conf/config-example-client.json" >/dev/null 2>&1 &
+nohup java -Xms512m -Xmx512m -jar ./lib/netty-websocket-proxy-1.3.2.jar -c -conf="./conf/config-example-client.json" >/dev/null 2>&1 &
