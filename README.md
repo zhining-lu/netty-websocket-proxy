@@ -16,11 +16,11 @@ A  implementation of Websocket-proxy in Java base on netty4 framework.
 3. run
 #### as swserver
 ```
-java -jar netty-websocket-proxy-x.x.x.jar -s -conf="conf/config-example-server.json"
+java -jar ./bin/netty-websocket-proxy-x.x.x.jar -s -conf="./conf/config-example-server.json"
 ```
 #### as swclient
 ```
-java -jar netty-websocket-proxy-x.x.x.jar -c -conf="conf/config-example-client.json"
+java -jar ./bin/netty-websocket-proxy-x.x.x.jar -c -conf="./conf/config-example-client.json"
 ```
   Note: You can also use the command under sbin to start the service. After the service starts, you can use Google Chrome and install the SwitchyOmega plug-in to surf the Internet
 
