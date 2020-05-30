@@ -74,6 +74,6 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
         //remove this pipline, bacause only one HttpReqest in In one websocket request process
 
         ctx.fireChannelRead(msg);
-//        ctx.pipeline().remove(this);
+        ctx.pipeline().remove(this);
     }
 }
