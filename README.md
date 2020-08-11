@@ -5,6 +5,7 @@ A  implementation of Forward-proxy in Java base on netty4 framework.
 
 - [x] TCP support
 - [x] CDN support
+- [x] SOCKS5 support
 
 
 # Environment
