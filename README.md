@@ -1,4 +1,4 @@
-# websocket-proxy-netty
+# netty-websocket-proxy
 A  implementation of Forward-proxy in Java base on netty4 framework.
 
 # Features
