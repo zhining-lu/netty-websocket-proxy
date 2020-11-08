@@ -2,7 +2,7 @@
 	<id>bin</id>
 	<!-- 最终打包成一个用于发布的zip文件 -->
 	<formats>
-		<format>zip</format>
+		<format>tar.gz</format>
 	</formats>
 
 	<!-- Adds dependencies to zip package under lib directory -->
@@ -18,10 +18,18 @@
 	<fileSets>
 		<!-- 把项目的脚本文件目录（ src/main/scripts ）中的启动脚本文件，打包进zip文件的跟目录 -->
 		<fileSet>
-			<directory>sbin</directory>
-			<outputDirectory>sbin</outputDirectory>
+			<directory>bin</directory>
+			<outputDirectory>bin</outputDirectory>
+			<fileMode>0755</fileMode>
 			<includes>
-				<include>*</include>
+				<include>*.sh</include>
+			</includes>
+		</fileSet>
+		<fileSet>
+			<directory>bin</directory>
+			<outputDirectory>bin</outputDirectory>
+			<includes>
+				<include>*.bat</include>
 			</includes>
 		</fileSet>
 		<fileSet>
@@ -36,6 +44,8 @@
 			<outputDirectory></outputDirectory>
 			<includes>
 				<include>*.properties</include>
+				<include>LICENSE</include>
+				<include>README.md</include>
 			</includes>
 		</fileSet>
 
