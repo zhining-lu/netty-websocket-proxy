@@ -12,8 +12,8 @@ A  implementation of Forward-proxy in Java base on netty4 framework.
 * JRE8
 
 # Install
-1. download netty-websocket-proxy-x.x.x-bin.zip
-2. unzip netty-websocket-proxy-x.x.x-bin.zip
+1. download netty-websocket-proxy-x.x.x-bin.tar.gz
+2. tar -xzvf netty-websocket-proxy-x.x.x-bin.tar.gz
 3. run
 #### as swserver
 ```
