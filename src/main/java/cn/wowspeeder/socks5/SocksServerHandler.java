@@ -2,6 +2,7 @@ package cn.wowspeeder.socks5;
 
 
 import cn.wowspeeder.sw.SWCommon;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -49,24 +50,15 @@ public final class SocksServerHandler extends SimpleChannelInboundHandler<SocksM
 //                      ctx.fireChannelRead(socksRequest);
 
                     } else if (socks5CmdRequest.type() == Socks5CommandType.UDP_ASSOCIATE) {
+                        //本项目只实现了 TCP 转发。旧代码在这里回 SUCCESS 并给出一个根本没有监听的
+                        //中继地址，客户端会认为 UDP 可用，随后所有数据报被静默丢弃。这里如实返回
+                        //COMMAND_UNSUPPORTED，让客户端立刻回退到 TCP。
                         ctx.pipeline().remove(this);
-
-                        InetSocketAddress bindAddr = (InetSocketAddress) ctx.channel().localAddress();
-                        InetAddress bindId = bindAddr.getAddress();
-                        Socks5AddressType bindAddrType = Socks5AddressType.IPv4;
-                        if (bindId instanceof Inet4Address) {
-                            bindAddrType = Socks5AddressType.IPv4;
-                        } else if (bindId instanceof Inet6Address) {
-                            bindAddrType = Socks5AddressType.IPv6;
-                        }
-
                         ctx.channel().writeAndFlush(new DefaultSocks5CommandResponse(
-                                Socks5CommandStatus.SUCCESS,
-                                bindAddrType,
-                                bindId.getHostAddress(),
-                                bindAddr.getPort()));
-
-//                       ctx.fireChannelRead(socksRequest);
+                                Socks5CommandStatus.COMMAND_UNSUPPORTED,
+                                Socks5AddressType.IPv4,
+                                "0.0.0.0",
+                                0)).addListener(ChannelFutureListener.CLOSE);
                     } else {
                         ctx.close();
                     }
