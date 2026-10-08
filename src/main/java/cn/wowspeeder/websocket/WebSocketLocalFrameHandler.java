@@ -42,8 +42,9 @@ public class WebSocketLocalFrameHandler extends MessageToMessageCodec<WebSocketF
     @Override
     protected void decode(ChannelHandlerContext ctx, WebSocketFrame msg, List<Object> out) throws Exception {
         //transfer to ByteBuf
-
-        out.add(msg.content().retain().retain());
+        //MessageToMessageDecoder 会在 decode 返回后 release 一次入站 frame（DefaultWebSocketFrame.release()
+        //即 content.release()），所以这里只能 retain 一次。多 retain 会导致每个下行帧泄漏一个池化 buffer。
+        out.add(msg.content().retain());
 
     }
 }
