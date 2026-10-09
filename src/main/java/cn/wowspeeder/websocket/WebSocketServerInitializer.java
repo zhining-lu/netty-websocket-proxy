@@ -21,7 +21,6 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
-import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
 import io.netty.handler.ssl.SslContext;
 
 /**
@@ -45,7 +44,8 @@ public class WebSocketServerInitializer extends ChannelInitializer<SocketChannel
         pipeline.addLast(new HttpServerCodec());
         pipeline.addLast(new HttpObjectAggregator(65536 * 5));
         pipeline.addLast(new HttpHandShakeRequestHandler());
-        pipeline.addLast(new WebSocketServerCompressionHandler());
+        // 不再协商 permessage-deflate：隧道载荷多为 TLS/已压缩内容，压缩带来的 CPU 与一次内存拷贝
+        // 收益为负；去掉后新旧对端仍可互通（对端 offer 压缩、本端不响应即协商降级）。
         pipeline.addLast(new WebSocketServerProtocolHandler(WEBSOCKET_PATH, null, true, 65536 * 5));
         pipeline.addLast(new WebSocketIndexPageHandler(WEBSOCKET_PATH));
         pipeline.addLast(new WebSocketServerFrameHandler());

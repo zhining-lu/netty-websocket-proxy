@@ -9,7 +9,7 @@
 		<RollingRandomAccessFile name="asynLogger"
 			fileName="./logs/sw-proxy.log" filePattern="./logs/sw-proxy-%d{yyyy-MM-dd}.log.%i">
 			<PatternLayout>
-				<Pattern>%d{yyyy-MM-dd HH:mm:ss} [%t] %L::: %-5p %C - %m%n</Pattern>
+				<Pattern>%d{yyyy-MM-dd HH:mm:ss} [%t] %-5p %c - %m%n</Pattern>
 			</PatternLayout>
 			<Policies>
 				<TimeBasedTriggeringPolicy interval="1"
@@ -22,12 +22,12 @@
 	</appenders>
 
 	<loggers>
-		<AsyncLogger name="org.netty" level="info" additivity="false"
-			includeLocation="true">
+		<AsyncLogger name="io.netty" level="info" additivity="false"
+			includeLocation="false">
 			<AppenderRef ref="asynLogger" />
 			<AppenderRef ref="Console" />
 		</AsyncLogger>
-		<AsyncRoot level="info" includeLocation="true">
+		<AsyncRoot level="info" includeLocation="false">
 			<AppenderRef ref="asynLogger" />
 			<AppenderRef ref="Console" />
 		</AsyncRoot>

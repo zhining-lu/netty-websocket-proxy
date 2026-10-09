@@ -12,7 +12,6 @@ import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory;
 import io.netty.handler.codec.http.websocketx.WebSocketVersion;
-import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler;
 import io.netty.handler.codec.socksx.v5.Socks5CommandRequest;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -29,11 +28,10 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.concurrent.TimeUnit;
 
 public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf> {
-    private static InternalLogger logger = InternalLoggerFactory.getInstance(SWServerTcpProxyHandler.class);
+    private static InternalLogger logger = InternalLoggerFactory.getInstance(SWLocalTcpProxyHandler.class);
 
     private InetSocketAddress ssServer;
     private Socks5CommandRequest remoteAddr;
@@ -69,7 +67,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
             String url = "ws://"+ssServer.getHostString()+":"+ssServer.getPort()+"/websocket?token="+ base64.getEncString(remoteAddr.dstAddr()+":"+remoteAddr.dstPort());
             //If the base64 encoding exceeds 76 characters, it will wrap, replace \n or \r in base64 encoding
-            logger.info("============"+ remoteAddr.dstAddr() +"====" + url.replaceAll("\r|\n",""));
+            logger.debug("connect {} -> {}:{}", ssServer, remoteAddr.dstAddr(), remoteAddr.dstPort());
             URI uri = new URI(url.replaceAll("\r|\n",""));
 
             final SslContext sslCtx = getSslContext(uri);
@@ -89,7 +87,8 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                     .option(ChannelOption.SO_KEEPALIVE, true)
                     .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
                     .option(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
-                    .option(ChannelOption.TCP_NODELAY, false)
+                    // 代理场景不应使用 Nagle：本端攒小包与对端 delayed ACK 叠加会白白多出约 40ms
+                    .option(ChannelOption.TCP_NODELAY, true)
                     .handler(
                             new ChannelInitializer<Channel>() {
                                 @Override
@@ -115,7 +114,6 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
                                     pipeline.addLast(new HttpClientCodec())
                                             .addLast(new HttpObjectAggregator(65536 * 5))
-                                            .addLast(WebSocketClientCompressionHandler.INSTANCE)
                                             .addLast(handler)
                                             .addLast(new WebSocketLocalFrameHandler());
 
@@ -140,7 +138,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                                 @Override
                                                 public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
 //                                                    super.exceptionCaught(ctx, cause);
-                                                    cause.printStackTrace();
+                                                    logger.debug("relay exception", cause);
                                                     proxyChannelClose();
                                                 }
                                             })
@@ -164,10 +162,11 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
                                                     //write remaining bufs
                                                     if (clientBuffs != null) {
-                                                        ListIterator<ByteBuf> bufsIterator = clientBuffs.listIterator();
-                                                        while (bufsIterator.hasNext()) {
-                                                            remoteChannel.writeAndFlush(bufsIterator.next());
+                                                        // 缓存的首包一次 syscall 批量写入，最后统一 flush，避免 N 次 writeAndFlush
+                                                        for (ByteBuf buf : clientBuffs) {
+                                                            remoteChannel.write(buf);
                                                         }
+                                                        remoteChannel.flush();
                                                         clientBuffs = null;
                                                     }
                                                 } else {

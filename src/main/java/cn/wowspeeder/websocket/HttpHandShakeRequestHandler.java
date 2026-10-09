@@ -2,6 +2,7 @@ package cn.wowspeeder.websocket;
 
 import cn.wowspeeder.encryption.Base64Encrypt;
 import cn.wowspeeder.sw.SWCommon;
+import cn.wowspeeder.sw.SWServerTcpProxyHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.http.HttpRequest;
@@ -61,6 +62,14 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                         int port = Integer.parseInt(m.group(2));
                         ctx.channel().attr(SWCommon.REMOTE_DES).set(new InetSocketAddress(host, port));
                         logger.info("client {} target url: {}", ctx.channel().remoteAddress(), host + ":" + port);
+
+                        // 目标地址一确定就立刻向目标发起 TCP 连接，与随后的 WebSocket 握手并行，
+                        // 省掉原先必须等首份业务数据才建连的约 1 个 RTT。
+                        // 连上之前到达的数据仍由 SWServerTcpProxyHandler 的 clientBuffs 缓存，不影响正确性。
+                        SWServerTcpProxyHandler tcpProxyHandler = ctx.pipeline().get(SWServerTcpProxyHandler.class);
+                        if (tcpProxyHandler != null) {
+                            tcpProxyHandler.connectTargetOnHandshake(ctx.channel());
+                        }
                     }else {
                         logger.error("may be password is not right");
                         throw new UnsupportedOperationException("may be password is not right");

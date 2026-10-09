@@ -68,7 +68,7 @@ public class SWServer {
                 .childOption(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
                 .childOption(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
-                .childOption(ChannelOption.TCP_NODELAY, false)
+                .childOption(ChannelOption.TCP_NODELAY, true)
                 .childOption(ChannelOption.SO_LINGER, 1) //关闭时等待1s发送关闭
                 .childHandler(new ChannelInitializer<NioSocketChannel>() {
                     @Override
