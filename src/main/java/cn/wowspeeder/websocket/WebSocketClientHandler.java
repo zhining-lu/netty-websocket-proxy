@@ -102,7 +102,7 @@ public class WebSocketClientHandler extends SimpleChannelInboundHandler<Object> 
         WebSocketFrame frame = (WebSocketFrame) msg;
         if (frame instanceof BinaryWebSocketFrame) {
             //本类是 SimpleChannelInboundHandler，本方法返回后框架会自动 release 一次入站消息；
-            //而下游 WebSocketLocalFrameHandler -> relay -> clientChannel.writeAndFlush 会消费掉
+            //而下游 WebSocketByteBufCodec -> relay -> clientChannel.writeAndFlush 会消费掉
             //这一份引用（WS 通道和 SOCKS 通道共用同一个 event loop，小包在 writeAndFlush 内部
             //就写完并释放引用）。所以转发前必须 retain，否则自动 release 会作用在已经归零的
             //buffer 上，抛出 IllegalReferenceCountException: refCnt: 0, decrement: 1。

@@ -1,12 +1,11 @@
 package cn.wowspeeder.sw;
 
 import cn.wowspeeder.encryption.Base64Encrypt;
+import cn.wowspeeder.websocket.WebSocketByteBufCodec;
 import cn.wowspeeder.websocket.WebSocketClientHandler;
-import cn.wowspeeder.websocket.WebSocketLocalFrameHandler;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.HttpClientCodec;
 import io.netty.handler.codec.http.HttpObjectAggregator;
@@ -44,7 +43,10 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
     public SWLocalTcpProxyHandler(String server, Integer port, String password) {
         this.password = password;
-        ssServer = new InetSocketAddress(server, port);
+        // 刻意用 createUnresolved：new InetSocketAddress(server, port) 会在构造时就同步查 DNS，
+        // 而本构造器是在 SOCKS 通道 initChannel 里被调用的（跑在 event loop 上）。
+        // 解析交给 AsyncDnsAddressResolverGroup 在独立线程池里做，见下面 proxyClient 的 resolver()。
+        ssServer = InetSocketAddress.createUnresolved(server, port);
     }
 
     @Override
@@ -82,13 +84,17 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
 
             proxyClient = new Bootstrap();//
-            proxyClient.group(clientChannel.eventLoop()).channel(NioSocketChannel.class)
+            proxyClient.group(clientChannel.eventLoop()).channel(NettyTransport.clientChannelClass())
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 60 * 1000)
                     .option(ChannelOption.SO_KEEPALIVE, true)
                     .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
                     .option(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
                     // 代理场景不应使用 Nagle：本端攒小包与对端 delayed ACK 叠加会白白多出约 40ms
                     .option(ChannelOption.TCP_NODELAY, true)
+                    // 隧道侧写缓冲的水位线，配合 BackPressure 把背压传到浏览器
+                    .option(ChannelOption.WRITE_BUFFER_WATER_MARK, SWCommon.WRITE_BUFFER_WATER_MARK)
+                    // ssServer 是未解析地址，异步解析避免阻塞 event loop
+                    .resolver(AsyncDnsAddressResolverGroup.INSTANCE)
                     .handler(
                             new ChannelInitializer<Channel>() {
                                 @Override
@@ -115,7 +121,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                     pipeline.addLast(new HttpClientCodec())
                                             .addLast(new HttpObjectAggregator(65536 * 5))
                                             .addLast(handler)
-                                            .addLast(new WebSocketLocalFrameHandler());
+                                            .addLast(new WebSocketByteBufCodec());
 
 //                                    pipeline.addLast("ssCipherCodec", new SSCipherCodec());
                                     pipeline.addLast("relay", new SimpleChannelInboundHandler<ByteBuf>() {
@@ -126,7 +132,15 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
                                                 @Override
                                                 public void channelActive(ChannelHandlerContext ctx) throws Exception {
-//                                                    logger.debug("channelActive {}",msg.readableBytes());
+                                                    // 隧道连上时先对齐一次水位：浏览器一侧可能已经不可写
+                                                    BackPressure.link(clientChannel, ctx.channel());
+                                                }
+
+                                                @Override
+                                                public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
+                                                    // 隧道写缓冲积压（数据从浏览器涌向隧道）=> 暂停读浏览器
+                                                    BackPressure.link(clientChannel, ctx.channel());
+                                                    super.channelWritabilityChanged(ctx);
                                                 }
 
                                                 @Override
@@ -169,6 +183,8 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                                         remoteChannel.flush();
                                                         clientBuffs = null;
                                                     }
+                                                    // 建连期间浏览器侧可能已经不可写，这里补一次对齐
+                                                    BackPressure.link(remoteChannel, clientChannel);
                                                 } else {
                                                     logger.error("channel id {}, {}<->{} handshake {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), ssServer.toString(), future.isSuccess(), future.cause());
                                                     proxyChannelClose();
@@ -212,6 +228,13 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         super.channelInactive(ctx);
         proxyChannelClose();
+    }
+
+    @Override
+    public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
+        // 浏览器写缓冲积压（数据从隧道涌向浏览器）=> 暂停读隧道
+        BackPressure.link(remoteChannel, ctx.channel());
+        super.channelWritabilityChanged(ctx);
     }
 
     @Override

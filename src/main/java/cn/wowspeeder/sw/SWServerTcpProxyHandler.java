@@ -3,7 +3,6 @@ package cn.wowspeeder.sw;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.handler.timeout.IdleStateHandler;
@@ -95,13 +94,18 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
         }
 
         proxyClient = new Bootstrap();//
-        proxyClient.group(clientChannel.eventLoop()).channel(NioSocketChannel.class)
+        proxyClient.group(clientChannel.eventLoop()).channel(NettyTransport.clientChannelClass())
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 60 * 1000)
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 读缓冲区为2M
                 .option(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
                 // 代理场景不应使用 Nagle：本端攒小包与对端 delayed ACK 叠加会白白多出约 40ms
                 .option(ChannelOption.TCP_NODELAY, true)
+                // 目标侧写缓冲的水位线，配合 BackPressure 把背压传回隧道
+                .option(ChannelOption.WRITE_BUFFER_WATER_MARK, SWCommon.WRITE_BUFFER_WATER_MARK)
+                // 目标地址是未解析的 InetSocketAddress（见 HttpHandShakeRequestHandler），
+                // 交给异步解析器，避免在 event loop 上做同步 DNS
+                .resolver(AsyncDnsAddressResolverGroup.INSTANCE)
                 .handler(
                         new ChannelInitializer<Channel>() {
                             @Override
@@ -123,7 +127,15 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
 
                                             @Override
                                             public void channelActive(ChannelHandlerContext ctx) throws Exception {
-//                                                    logger.debug("channelActive {}",msg.readableBytes());
+                                                // 目标连上时先对齐一次水位：隧道可能在建连期间就已经不可写
+                                                BackPressure.link(clientChannel, ctx.channel());
+                                            }
+
+                                            @Override
+                                            public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
+                                                // 目标写缓冲积压（数据从隧道涌向目标）=> 暂停读隧道
+                                                BackPressure.link(clientChannel, ctx.channel());
+                                                super.channelWritabilityChanged(ctx);
                                             }
 
                                             @Override
@@ -157,6 +169,8 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
                                     remoteChannel.flush();
                                     clientBuffs = null;
                                 }
+                                // 建连期间隧道可能已经变成不可写，这里补一次对齐
+                                BackPressure.link(remoteChannel, clientChannel);
                             } else {
                                 logger.error("channel id {}, {}<->{} connect {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), clientRecipient.toString(), future.isSuccess(), future.cause());
                                 proxyChannelClose();
@@ -176,6 +190,13 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         super.channelInactive(ctx);
         proxyChannelClose();
+    }
+
+    @Override
+    public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
+        // 隧道写缓冲积压（数据从目标涌向隧道）=> 暂停读目标，让背压传到目标服务器
+        BackPressure.link(remoteChannel, ctx.channel());
+        super.channelWritabilityChanged(ctx);
     }
 
     @Override

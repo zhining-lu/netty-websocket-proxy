@@ -2,13 +2,11 @@ package cn.wowspeeder;
 
 import cn.wowspeeder.config.Config;
 import cn.wowspeeder.config.ConfigLoader;
+import cn.wowspeeder.sw.NettyTransport;
 import cn.wowspeeder.sw.SWCommon;
-import cn.wowspeeder.sw.SWServerCheckerReceive;
-import cn.wowspeeder.sw.SWServerCheckerSend;
 import cn.wowspeeder.sw.SWServerTcpProxyHandler;
 import cn.wowspeeder.websocket.WebSocketServerInitializer;
 import io.netty.channel.*;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.SelfSignedCertificate;
@@ -19,8 +17,6 @@ import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -28,11 +24,12 @@ import java.util.concurrent.TimeUnit;
 public class SWServer {
     private static InternalLogger logger = InternalLoggerFactory.getInstance(SWServer.class);
 
-    private static EventLoopGroup bossGroup = new NioEventLoopGroup();
-    private static EventLoopGroup workerGroup = new NioEventLoopGroup();
-
     private static SWServer SWServer = new SWServer();
     static final boolean SSL = System.getProperty("ssl") != null;
+
+    /** 启动时按配置创建，见 {@link #start(String)}。 */
+    private EventLoopGroup bossGroup;
+    private EventLoopGroup workerGroup;
 
     public static SWServer getInstance() {
         return SWServer;
@@ -45,6 +42,10 @@ public class SWServer {
     public void start(String configPath) throws Exception {
         final Config config = ConfigLoader.load(configPath);
         logger.info("load config !");
+
+        NettyTransport.init(config.isUseEpoll(), config.isSoReuseport());
+        bossGroup = NettyTransport.newEventLoopGroup(config.getBossThreads(), "sw-server-boss");
+        workerGroup = NettyTransport.newEventLoopGroup(config.getWorkerThreads(), "sw-server-worker");
 
         for (Map.Entry<Integer, String> portPassword : config.getPortPassword().entrySet()) {
             startSingle(config.getServer(), portPassword.getKey(), portPassword.getValue());
@@ -62,18 +63,19 @@ public class SWServer {
         }
 
         ServerBootstrap tcpBootstrap = new ServerBootstrap();
-        tcpBootstrap.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class)
+        tcpBootstrap.group(bossGroup, workerGroup).channel(NettyTransport.serverChannelClass())
                 .option(ChannelOption.SO_BACKLOG, 5120)
                 .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
                 .childOption(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
                 .childOption(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .childOption(ChannelOption.TCP_NODELAY, true)
+                // 隧道侧写缓冲的水位线：撞到高水位就暂停读目标，避免慢客户端把数据堆在服务端进程里
+                .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, SWCommon.WRITE_BUFFER_WATER_MARK)
                 .childOption(ChannelOption.SO_LINGER, 1) //关闭时等待1s发送关闭
-                .childHandler(new ChannelInitializer<NioSocketChannel>() {
+                .childHandler(new ChannelInitializer<Channel>() {
                     @Override
-                    protected void initChannel(NioSocketChannel ctx) throws Exception {
-//                            ctx.pipeline().addLast(new SSTcpHandler(config));
+                    protected void initChannel(Channel ctx) throws Exception {
                         logger.debug("channel initializer");
 
                         ctx.attr(SWCommon.PASSWORD).set(password);
@@ -88,22 +90,17 @@ public class SWServer {
                                     }
                                 });
 
-                        //ss
-                        ctx.pipeline()
-//                                .addLast(new LoggingHandler(LogLevel.INFO))
-                                //ss-in
-                                .addLast("ssCheckerReceive", new SWServerCheckerReceive())
-                                //ss-out
-                                .addLast("ssCheckerSend", new SWServerCheckerSend())
-                                //ss-websocket
-                                .addLast(new WebSocketServerInitializer(sslCtx))
-                                //ss-cypt
-//                                .addLast("ssCipherCodec", new SSCipherCodec())
+                        //ss-websocket
+                        ctx.pipeline().addLast(new WebSocketServerInitializer(sslCtx))
                                 //ss-proxy
                                 .addLast("ssTcpProxy", new SWServerTcpProxyHandler());
 
                     }
                 });
+
+        if (NettyTransport.isSoReusePortEnabled()) {
+            tcpBootstrap.option(NettyTransport.soReusePortOption(), true);
+        }
 
 //            logger.info("TCP Start At Port " + config.get_localPort());
         tcpBootstrap.bind(server, port).sync();

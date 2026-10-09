@@ -60,7 +60,11 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                     if (m.matches()) {
                         String host = m.group(1);
                         int port = Integer.parseInt(m.group(2));
-                        ctx.channel().attr(SWCommon.REMOTE_DES).set(new InetSocketAddress(host, port));
+                        // 刻意用 createUnresolved：new InetSocketAddress(host, port) 会在构造时就
+                        // 同步查 DNS，而这里跑在服务端 accept 后的 event loop 上 —— 一次慢解析
+                        // 会把该 event loop 上的所有连接一起卡住。交给 AsyncDnsAddressResolverGroup
+                        // 在独立线程池里异步解析（见 SWServerTcpProxyHandler 里 Bootstrap.resolver）。
+                        ctx.channel().attr(SWCommon.REMOTE_DES).set(InetSocketAddress.createUnresolved(host, port));
                         logger.info("client {} target url: {}", ctx.channel().remoteAddress(), host + ":" + port);
 
                         // 目标地址一确定就立刻向目标发起 TCP 连接，与随后的 WebSocket 握手并行，

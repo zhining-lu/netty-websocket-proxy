@@ -48,6 +48,6 @@ public class WebSocketServerInitializer extends ChannelInitializer<SocketChannel
         // 收益为负；去掉后新旧对端仍可互通（对端 offer 压缩、本端不响应即协商降级）。
         pipeline.addLast(new WebSocketServerProtocolHandler(WEBSOCKET_PATH, null, true, 65536 * 5));
         pipeline.addLast(new WebSocketIndexPageHandler(WEBSOCKET_PATH));
-        pipeline.addLast(new WebSocketServerFrameHandler());
+        pipeline.addLast(new WebSocketByteBufCodec());
     }
 }

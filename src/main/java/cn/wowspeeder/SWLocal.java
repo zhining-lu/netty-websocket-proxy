@@ -3,13 +3,11 @@ package cn.wowspeeder;
 import cn.wowspeeder.config.Config;
 import cn.wowspeeder.config.ConfigLoader;
 import cn.wowspeeder.socks5.SocksServerHandler;
+import cn.wowspeeder.sw.NettyTransport;
 import cn.wowspeeder.sw.SWCommon;
 import cn.wowspeeder.sw.SWLocalTcpProxyHandler;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
-import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
@@ -24,10 +22,11 @@ public class SWLocal {
     private static InternalLogger logger = InternalLoggerFactory.getInstance(SWLocal.class);
 
 
-    private static EventLoopGroup bossGroup = new NioEventLoopGroup();
-    private static EventLoopGroup workerGroup = new NioEventLoopGroup();
-
     private static SWLocal SWLocal = new SWLocal();
+
+    /** 启动时按配置创建，见 {@link #start(String)}。 */
+    private EventLoopGroup bossGroup;
+    private EventLoopGroup workerGroup;
 
     public static SWLocal getInstance() {
         return SWLocal;
@@ -41,6 +40,10 @@ public class SWLocal {
         final Config config = ConfigLoader.load(configPath);
         logger.info("load config !");
 
+        NettyTransport.init(config.isUseEpoll(), config.isSoReuseport());
+        bossGroup = NettyTransport.newEventLoopGroup(config.getBossThreads(), "sw-local-boss");
+        workerGroup = NettyTransport.newEventLoopGroup(config.getWorkerThreads(), "sw-local-worker");
+
         for (Map.Entry<Integer, String> portPassword : config.getPortPassword().entrySet()) {
             startSingle(config.getLocalAddress(), config.getLocalPort(),
                     config.getServer(),
@@ -53,16 +56,18 @@ public class SWLocal {
         ServerBootstrap tcpBootstrap = new ServerBootstrap();
 
         //local socks5  server ,tcp
-        tcpBootstrap.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class)
+        tcpBootstrap.group(bossGroup, workerGroup).channel(NettyTransport.serverChannelClass())
                 .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
                 .childOption(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
                 .childOption(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .childOption(ChannelOption.TCP_NODELAY, true)
-                .childHandler(new ChannelInitializer<NioSocketChannel>() {
+                // 浏览器侧写缓冲的水位线：撞到高水位就暂停读隧道，避免慢客户端把数据堆在本地进程里
+                .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, SWCommon.WRITE_BUFFER_WATER_MARK)
+                .childHandler(new ChannelInitializer<Channel>() {
 
                     @Override
-                    protected void initChannel(NioSocketChannel ctx) throws Exception {
+                    protected void initChannel(Channel ctx) throws Exception {
                         logger.debug("channel initializer");
                         ctx.pipeline()
                                 //timeout
@@ -82,6 +87,10 @@ public class SWLocal {
                                 .addLast(new SWLocalTcpProxyHandler(server, port, password));
                     }
                 });
+
+        if (NettyTransport.isSoReusePortEnabled()) {
+            tcpBootstrap.option(NettyTransport.soReusePortOption(), true);
+        }
 
 //            logger.info("TCP Start At Port " + config.get_localPort());
         tcpBootstrap.bind(socks5Server, socks5Port).sync();
