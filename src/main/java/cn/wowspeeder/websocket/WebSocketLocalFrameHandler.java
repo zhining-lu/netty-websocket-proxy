@@ -42,8 +42,10 @@ public class WebSocketLocalFrameHandler extends MessageToMessageCodec<WebSocketF
     @Override
     protected void decode(ChannelHandlerContext ctx, WebSocketFrame msg, List<Object> out) throws Exception {
         //transfer to ByteBuf
-        //MessageToMessageDecoder 会在 decode 返回后 release 一次入站 frame（DefaultWebSocketFrame.release()
-        //即 content.release()），所以这里只能 retain 一次。多 retain 会导致每个下行帧泄漏一个池化 buffer。
+        //MessageToMessageDecoder 会在 decode 返回后 release 一次入站 frame（DefaultWebSocketFrame 没有
+        //独立引用计数，frame.release() 就是 content.release()），所以这里只 retain 一次，这一个引用
+        //交给下游 relay 消费。上游 WebSocketClientHandler 转发帧时已经自行 retain，这里再多 retain
+        //一次会让引用计数多 1，最终在下游释放后于 WebSocketClientHandler 的自动 release 处炸掉。
         out.add(msg.content().retain());
 
     }
