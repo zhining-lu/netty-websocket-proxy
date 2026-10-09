@@ -60,6 +60,7 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                         String host = m.group(1);
                         int port = Integer.parseInt(m.group(2));
                         ctx.channel().attr(SWCommon.REMOTE_DES).set(new InetSocketAddress(host, port));
+                        logger.info("client {} target url: {}", ctx.channel().remoteAddress(), host + ":" + port);
                     }else {
                         logger.error("may be password is not right");
                         throw new UnsupportedOperationException("may be password is not right");
