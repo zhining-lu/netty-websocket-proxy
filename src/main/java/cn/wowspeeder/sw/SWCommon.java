@@ -17,11 +17,10 @@ public class SWCommon {
     /**
      * 写缓冲高低水位线，配合 {@link BackPressure} 做端到端背压。
      *
-     * <p>Netty 默认是 32KB / 64KB，对代理来说太小：一次稍大的下载就会撞上高水位，
-     * 触发「暂停读上游 → 排空 → 恢复」的来回抖动，反而伤吞吐。
-     * 这里抬到 256KB / 1MB —— 高水位 1MB 意味着单条连接最多在用户态攒 1MB，
-     * 1000 条并发连接的最坏内存占用约 1GB，是个可按机器内存调整的折中值。
+     * @deprecated 已挪到 {@link SocketOptions#WRITE_BUFFER_WATER_MARK}，
+     *             和 socket 缓冲区选项放在一起更便于对照。保留此常量仅为兼容旧引用。
      */
+    @Deprecated
     public static final WriteBufferWaterMark WRITE_BUFFER_WATER_MARK =
-            new WriteBufferWaterMark(256 * 1024, 1024 * 1024);
+            SocketOptions.WRITE_BUFFER_WATER_MARK;
 }

@@ -87,12 +87,15 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
             proxyClient.group(clientChannel.eventLoop()).channel(NettyTransport.clientChannelClass())
                     .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 60 * 1000)
                     .option(ChannelOption.SO_KEEPALIVE, true)
-                    .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
-                    .option(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
+                    // proxyClient 的 SO_RCVBUF/SO_SNDBUF 不再硬编码。
+                    // 原来写的 2MB 会被内核先截断到 net.core.wmem_max（默认 208KB）再翻倍，
+                    // 实际生效值由系统参数决定；更糟的是设置它会关闭内核的 BDP 自动调优，
+                    // 在高速链路上反而成为瓶颈。默认不设，交给内核自适应。
+                    // 需要时用配置项 receive_buffer / send_buffer 显式开启，见 SocketOptions。
                     // 代理场景不应使用 Nagle：本端攒小包与对端 delayed ACK 叠加会白白多出约 40ms
                     .option(ChannelOption.TCP_NODELAY, true)
                     // 隧道侧写缓冲的水位线，配合 BackPressure 把背压传到浏览器
-                    .option(ChannelOption.WRITE_BUFFER_WATER_MARK, SWCommon.WRITE_BUFFER_WATER_MARK)
+                    .option(ChannelOption.WRITE_BUFFER_WATER_MARK, SocketOptions.WRITE_BUFFER_WATER_MARK)
                     // ssServer 是未解析地址，异步解析避免阻塞 event loop
                     .resolver(AsyncDnsAddressResolverGroup.INSTANCE)
                     .handler(
@@ -160,6 +163,8 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                 }
                             }
                     );
+            // socket 缓冲区：默认不设，内核自动调优更好（原因见 SocketOptions）
+            SocketOptions.applySend(proxyClient);
             try {
 
                 proxyClient

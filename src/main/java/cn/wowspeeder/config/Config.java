@@ -35,6 +35,24 @@ public class Config {
 	@SerializedName("so_reuseport")
 	private Boolean soReuseport;
 
+	/**
+	 * 显式指定 SO_RCVBUF（字节），缺省 null = 不设置，交给内核 BDP 自动调优。
+	 * <p>
+	 * <b>非必要不要设</b>：一旦设置，内核会先把它截断到 {@code net.core.rmem_max}
+	 * （默认 208KB）再翻倍，并且会关闭接收方向的自动调优。只有当你确实需要
+	 * 限制内存占用（例如成千上万条并发连接的接入机）时才显式指定。
+	 */
+	@SerializedName("receive_buffer")
+	private Integer receiveBuffer;
+
+	/**
+	 * 显式指定 SO_SNDBUF（字节），缺省 null = 不设置，交给内核 BDP 自动调优。
+	 * <p>
+	 * 语义与限制同 {@link #receiveBuffer}，对应 {@code net.core.wmem_max}。
+	 */
+	@SerializedName("send_buffer")
+	private Integer sendBuffer;
+
 	public String getServer() {
 		return server;
 	}
@@ -97,6 +115,28 @@ public class Config {
 
 	public void setSoReuseport(Boolean soReuseport) {
 		this.soReuseport = soReuseport;
+	}
+
+	/**
+	 * @return 显式指定的接收缓冲区大小；null 或非正数表示不设置（走内核自动调优）。
+	 */
+	public Integer getReceiveBuffer() {
+		return receiveBuffer == null || receiveBuffer <= 0 ? null : receiveBuffer;
+	}
+
+	public void setReceiveBuffer(Integer receiveBuffer) {
+		this.receiveBuffer = receiveBuffer;
+	}
+
+	/**
+	 * @return 显式指定的发送缓冲区大小；null 或非正数表示不设置（走内核自动调优）。
+	 */
+	public Integer getSendBuffer() {
+		return sendBuffer == null || sendBuffer <= 0 ? null : sendBuffer;
+	}
+
+	public void setSendBuffer(Integer sendBuffer) {
+		this.sendBuffer = sendBuffer;
 	}
 
 }

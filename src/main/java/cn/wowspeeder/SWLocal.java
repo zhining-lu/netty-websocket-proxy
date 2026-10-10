@@ -6,6 +6,7 @@ import cn.wowspeeder.socks5.SocksServerHandler;
 import cn.wowspeeder.sw.NettyTransport;
 import cn.wowspeeder.sw.SWCommon;
 import cn.wowspeeder.sw.SWLocalTcpProxyHandler;
+import cn.wowspeeder.sw.SocketOptions;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler;
@@ -41,6 +42,8 @@ public class SWLocal {
         logger.info("load config !");
 
         NettyTransport.init(config.isUseEpoll(), config.isSoReuseport());
+        // socket 缓冲区默认不设，交给内核按实测 BDP 自动调优；只有配置显式给了值才设。
+        SocketOptions.configure(config.getReceiveBuffer(), config.getSendBuffer());
         bossGroup = NettyTransport.newEventLoopGroup(config.getBossThreads(), "sw-local-boss");
         workerGroup = NettyTransport.newEventLoopGroup(config.getWorkerThreads(), "sw-local-worker");
 
@@ -57,13 +60,13 @@ public class SWLocal {
 
         //local socks5  server ,tcp
         tcpBootstrap.group(bossGroup, workerGroup).channel(NettyTransport.serverChannelClass())
-                .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
-                .childOption(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
-                .childOption(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
+                // 注意：SO_RCVBUF/SO_SNDBUF 一律设在 childOption 上。
+                // 设在父 channel（监听 socket）上对已接受连接没有任何作用，只是徒增困惑，
+                // 原来那行 .option(ChannelOption.SO_RCVBUF, ...) 就是这种情况，已删除。
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .childOption(ChannelOption.TCP_NODELAY, true)
                 // 浏览器侧写缓冲的水位线：撞到高水位就暂停读隧道，避免慢客户端把数据堆在本地进程里
-                .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, SWCommon.WRITE_BUFFER_WATER_MARK)
+                .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, SocketOptions.WRITE_BUFFER_WATER_MARK)
                 .childHandler(new ChannelInitializer<Channel>() {
 
                     @Override
@@ -87,6 +90,9 @@ public class SWLocal {
                                 .addLast(new SWLocalTcpProxyHandler(server, port, password));
                     }
                 });
+
+        // socket 缓冲区：默认这里什么都不做，内核自动调优效果更好（原因见 SocketOptions）
+        SocketOptions.applyChild(tcpBootstrap);
 
         if (NettyTransport.isSoReusePortEnabled()) {
             tcpBootstrap.option(NettyTransport.soReusePortOption(), true);

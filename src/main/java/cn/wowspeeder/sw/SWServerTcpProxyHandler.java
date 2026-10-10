@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import cn.wowspeeder.sw.SocketOptions;
+
 public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf> {
     private static InternalLogger logger = InternalLoggerFactory.getInstance(SWServerTcpProxyHandler.class);
 
@@ -97,12 +99,14 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
         proxyClient.group(clientChannel.eventLoop()).channel(NettyTransport.clientChannelClass())
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 60 * 1000)
                 .option(ChannelOption.SO_KEEPALIVE, true)
-                .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 读缓冲区为2M
-                .option(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
+                // 目标侧的 SO_RCVBUF/SO_SNDBUF 不再硬编码 2MB：
+                // 内核会先把值截断到 net.core.rmem_max/wmem_max（默认 208KB）再翻倍，
+                // 所以写 2MB 实际由系统参数决定；而且设置它会关闭 BDP 自动调优，
+                // 在高速链路上反而变慢。默认不设，需要时用配置项显式开启，见 SocketOptions。
                 // 代理场景不应使用 Nagle：本端攒小包与对端 delayed ACK 叠加会白白多出约 40ms
                 .option(ChannelOption.TCP_NODELAY, true)
                 // 目标侧写缓冲的水位线，配合 BackPressure 把背压传回隧道
-                .option(ChannelOption.WRITE_BUFFER_WATER_MARK, SWCommon.WRITE_BUFFER_WATER_MARK)
+                .option(ChannelOption.WRITE_BUFFER_WATER_MARK, SocketOptions.WRITE_BUFFER_WATER_MARK)
                 // 目标地址是未解析的 InetSocketAddress（见 HttpHandShakeRequestHandler），
                 // 交给异步解析器，避免在 event loop 上做同步 DNS
                 .resolver(AsyncDnsAddressResolverGroup.INSTANCE)
@@ -154,6 +158,8 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
                         }
                 );
         try {
+            // 目标侧 socket 缓冲区：默认不设（交给内核自动调优），仅在配置里显式指定时才生效
+            SocketOptions.applySend(proxyClient);
             proxyClient
                     .connect(clientRecipient)
                     .addListener((ChannelFutureListener) future -> {

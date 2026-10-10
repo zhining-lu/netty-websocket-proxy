@@ -5,6 +5,7 @@ import cn.wowspeeder.config.ConfigLoader;
 import cn.wowspeeder.sw.NettyTransport;
 import cn.wowspeeder.sw.SWCommon;
 import cn.wowspeeder.sw.SWServerTcpProxyHandler;
+import cn.wowspeeder.sw.SocketOptions;
 import cn.wowspeeder.websocket.WebSocketServerInitializer;
 import io.netty.channel.*;
 import io.netty.handler.ssl.SslContext;
@@ -44,6 +45,8 @@ public class SWServer {
         logger.info("load config !");
 
         NettyTransport.init(config.isUseEpoll(), config.isSoReuseport());
+        // socket 缓冲区默认不设，交给内核按实测 BDP 自动调优；只有配置显式给了值才设。
+        SocketOptions.configure(config.getReceiveBuffer(), config.getSendBuffer());
         bossGroup = NettyTransport.newEventLoopGroup(config.getBossThreads(), "sw-server-boss");
         workerGroup = NettyTransport.newEventLoopGroup(config.getWorkerThreads(), "sw-server-worker");
 
@@ -65,13 +68,12 @@ public class SWServer {
         ServerBootstrap tcpBootstrap = new ServerBootstrap();
         tcpBootstrap.group(bossGroup, workerGroup).channel(NettyTransport.serverChannelClass())
                 .option(ChannelOption.SO_BACKLOG, 5120)
-                .option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
-                .childOption(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024)// 接收缓冲区为2M
-                .childOption(ChannelOption.SO_SNDBUF, 2 * 1024 * 1024)// 发送缓冲区为2M
+                // SO_RCVBUF/SO_SNDBUF 只设在 childOption（已接受的连接）上。
+                // 父 channel 上的那行 SO_RCVBUF 对连接无作用，已删除；实际是否设置见下方 applyChild。
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .childOption(ChannelOption.TCP_NODELAY, true)
                 // 隧道侧写缓冲的水位线：撞到高水位就暂停读目标，避免慢客户端把数据堆在服务端进程里
-                .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, SWCommon.WRITE_BUFFER_WATER_MARK)
+                .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, SocketOptions.WRITE_BUFFER_WATER_MARK)
                 .childOption(ChannelOption.SO_LINGER, 1) //关闭时等待1s发送关闭
                 .childHandler(new ChannelInitializer<Channel>() {
                     @Override
@@ -97,6 +99,9 @@ public class SWServer {
 
                     }
                 });
+
+        // socket 缓冲区：默认这里什么都不做，内核自动调优效果更好（原因见 SocketOptions）
+        SocketOptions.applyChild(tcpBootstrap);
 
         if (NettyTransport.isSoReusePortEnabled()) {
             tcpBootstrap.option(NettyTransport.soReusePortOption(), true);
