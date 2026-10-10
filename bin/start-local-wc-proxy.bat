@@ -149,9 +149,9 @@ echo    log : %CD%\logs\sw-proxy.log
 echo.
 rem --- the old "pause >nul 2>nul" was a no-op: pause printed nothing and
 rem     the window hung forever. Show a friendly countdown instead:
-rem     auto-close after 10s, or press any key to close right away.
+rem     auto-close after 5s, or press any key to close right away.
 rem     NOTE: "choice" prints the message itself; do not echo it again. ---
-choice /c yc /n /t 10 /d c /m "All done. Closing in 10s - press any key to close now..."
+choice /c yc /n /t 5 /d c /m "All done. Closing in 5s - press any key to close now..."
 popd
 endlocal
 exit /b 0
