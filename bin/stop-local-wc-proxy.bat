@@ -57,9 +57,9 @@ if "%KILLED%"=="0" echo [INFO] nothing to stop.
 echo.
 rem --- old script ended with a bare "pause": window blocked forever with
 rem     no message. Show a friendly countdown instead: auto-close after
-rem     5s, or press any key to close right away.
+rem     3s, or press any key to close right away.
 rem     NOTE: "choice" prints the message itself; do not echo it again. ---
-choice /c yc /n /t 5 /d c /m "All done. Closing in 5s - press any key to close now..."
+choice /c yc /n /t 3 /d c /m "All done. Closing in 3s - press any key to close now..."
 
 popd
 endlocal
