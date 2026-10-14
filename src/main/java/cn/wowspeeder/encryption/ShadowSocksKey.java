@@ -5,8 +5,8 @@ import java.security.MessageDigest;
 
 import javax.crypto.SecretKey;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 /**
  * Shadowsocks key generator
@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 public class ShadowSocksKey implements SecretKey {
 
 	private static final long serialVersionUID = 1L;
-	private static Logger logger = LoggerFactory.getLogger(ShadowSocksKey.class);
+	private static final InternalLogger logger = InternalLoggerFactory.getInstance(ShadowSocksKey.class);
 	private final static int KEY_LENGTH = 32;
 	private byte[] _key;
 	private int _length;

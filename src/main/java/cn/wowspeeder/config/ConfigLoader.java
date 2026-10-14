@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
@@ -16,7 +16,7 @@ import com.google.gson.stream.JsonReader;
  */
 public class ConfigLoader {
 
-    private static Logger logger = LoggerFactory.getLogger(ConfigLoader.class);
+    private static final InternalLogger logger = InternalLoggerFactory.getInstance(ConfigLoader.class);
 
     public static Config load(String file) throws Exception {
         InputStream in = null;

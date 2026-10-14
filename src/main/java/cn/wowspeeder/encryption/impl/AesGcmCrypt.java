@@ -5,8 +5,8 @@ import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.engines.AESEngine;
 import org.bouncycastle.crypto.modes.AEADBlockCipher;
 import org.bouncycastle.crypto.modes.GCMBlockCipher;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 
 import java.io.ByteArrayOutputStream;
@@ -19,7 +19,7 @@ import java.util.Map;
 
 
 public class AesGcmCrypt extends CryptAeadBase {
-    private static Logger logger = LoggerFactory.getLogger(AesGcmCrypt.class);
+    private static final InternalLogger logger = InternalLoggerFactory.getInstance(AesGcmCrypt.class);
 
     public final static String CIPHER_AEAD_128_GCM = "aes-128-gcm";
     //    public final static String CIPHER_AEAD_192_GCM = "aes-192-gcm";

@@ -117,7 +117,7 @@ public class SWLocal {
         try {
             getInstance().start("conf/config-example-client.json");
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("start local socks5 proxy failed", e);
             getInstance().stop();
             System.exit(-1);
         }

@@ -5,12 +5,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 import cn.wowspeeder.encryption.impl.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 
 public class CryptFactory {
 
-    private static Logger logger = LoggerFactory.getLogger(CryptFactory.class);
+    private static final InternalLogger logger = InternalLoggerFactory.getInstance(CryptFactory.class);
 
     private static Map<String, String> crypts = new HashMap<String, String>();
 

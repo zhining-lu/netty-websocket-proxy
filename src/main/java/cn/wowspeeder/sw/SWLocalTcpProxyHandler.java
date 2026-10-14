@@ -254,7 +254,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
         String scheme = uri.getScheme() == null? "ws" : uri.getScheme();
 
         if (!"ws".equalsIgnoreCase(scheme) && !"wss".equalsIgnoreCase(scheme)) {
-            System.err.println("Only WS(S) is supported.");
+            logger.error("Only WS(S) is supported.");
             return null;
         }
 

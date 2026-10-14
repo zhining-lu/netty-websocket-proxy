@@ -127,7 +127,7 @@ public class SWServer {
         try {
             getInstance().start("conf/config-example-server.json");
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("start websocket server failed", e);
             getInstance().stop();
             System.exit(-1);
         }
