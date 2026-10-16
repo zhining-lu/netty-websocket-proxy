@@ -179,9 +179,22 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                         .addListener((ChannelFutureListener) future -> {
                                             try {
                                                 if (future.isSuccess()) {
-                                                    logger.debug("channel id {}, {}<->{}<->{} handshake  {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), future.channel().localAddress().toString(), ssServer.toString(), future.isSuccess());
                                                     remoteChannel = future.channel();
+                                                    // 先记账：终态判定不依赖 clientChannel。浏览器可能在建连完成前就断开，
+                                                    // 此时 channelInactive -> proxyChannelClose() 已把 clientChannel 置为 null；
+                                                    // 若在记账之前访问 clientChannel 会抛 NPE 被下面的 catch 吞掉，导致这次尝试
+                                                    // 永远既不算成功也不算失败（线上 attempt=60/success=56/fail=0 的 4 个缺口即源于此）。
                                                     ProxyStats.tunnelSucceeded();
+
+                                                    // 浏览器在建连期间已断开：隧道本身建成功（已计入成功），但已无对端可用，
+                                                    // 直接关闭，避免留下悬挂连接。
+                                                    if (clientChannel == null) {
+                                                        logger.debug("client closed before tunnel ready, {}<->{} handshake {}", future.channel().localAddress().toString(), ssServer.toString(), future.isSuccess());
+                                                        proxyChannelClose();
+                                                        return;
+                                                    }
+
+                                                    logger.debug("channel id {}, {}<->{}<->{} handshake  {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), future.channel().localAddress().toString(), ssServer.toString(), future.isSuccess());
 
                                                     //write remaining bufs
                                                     if (clientBuffs != null) {
@@ -195,8 +208,13 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                                     // 建连期间浏览器侧可能已经不可写，这里补一次对齐
                                                     BackPressure.link(remoteChannel, clientChannel);
                                                 } else {
-                                                    logger.error("channel id {}, {}<->{} handshake {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), ssServer.toString(), future.isSuccess(), future.cause());
+                                                    // 先记账：同上，不依赖 clientChannel
                                                     ProxyStats.tunnelFailed();
+                                                    if (clientChannel == null) {
+                                                        logger.error("client closed, {} handshake {},cause {}", ssServer.toString(), future.isSuccess(), future.cause());
+                                                    } else {
+                                                        logger.error("channel id {}, {}<->{} handshake {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), ssServer.toString(), future.isSuccess(), future.cause());
+                                                    }
                                                     proxyChannelClose();
                                                 }
                                             } catch (Exception e) {
