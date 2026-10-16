@@ -65,9 +65,16 @@ public class WebSocketClientHandler extends SimpleChannelInboundHandler<Object> 
     }
 
     @Override
-    public void channelActive(ChannelHandlerContext ctx) {
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
 
         handshaker.handshake(ctx.channel());
+
+        // 必须把 channelActive 继续往下传：本 handler 之后的 WebSocketByteBufCodec 与 relay 都依赖它。
+        // 漏掉这一步时，relay 只会在关闭时收到 channelInactive（它的 channelInactive 有 super 调用），
+        // 于是「活跃隧道」计数只减不增、最终变成负数；relay 里那句「隧道连上先对齐一次水位」的
+        // BackPressure.link 也永远不会执行。Netty 官方示例里这个 handler 是 pipeline 末端，
+        // 所以照抄时不会暴露问题，但本项目在它之后还挂了 handler。
+        super.channelActive(ctx);
 
     }
 
