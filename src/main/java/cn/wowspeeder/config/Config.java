@@ -53,6 +53,14 @@ public class Config {
 	@SerializedName("send_buffer")
 	private Integer sendBuffer;
 
+	/**
+	 * 周期性统计日志的间隔（秒），缺省 60；&le;0 表示关闭周期性统计。
+	 * <p>
+	 * 统计内容见 {@link cn.wowspeeder.sw.ProxyStats}：活跃连接数、隧道/目标建连成功率、DNS 缓存命中率。
+	 */
+	@SerializedName("stats_interval_seconds")
+	private Integer statsIntervalSeconds;
+
 	public String getServer() {
 		return server;
 	}
@@ -137,6 +145,17 @@ public class Config {
 
 	public void setSendBuffer(Integer sendBuffer) {
 		this.sendBuffer = sendBuffer;
+	}
+
+	/**
+	 * @return 统计日志间隔秒数；缺省 60，&le;0 表示不打印周期性统计。
+	 */
+	public int getStatsIntervalSeconds() {
+		return statsIntervalSeconds == null ? 60 : statsIntervalSeconds;
+	}
+
+	public void setStatsIntervalSeconds(Integer statsIntervalSeconds) {
+		this.statsIntervalSeconds = statsIntervalSeconds;
 	}
 
 }

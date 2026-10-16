@@ -4,6 +4,7 @@ import cn.wowspeeder.config.Config;
 import cn.wowspeeder.config.ConfigLoader;
 import cn.wowspeeder.socks5.SocksServerHandler;
 import cn.wowspeeder.sw.NettyTransport;
+import cn.wowspeeder.sw.ProxyStats;
 import cn.wowspeeder.sw.SWCommon;
 import cn.wowspeeder.sw.SWLocalTcpProxyHandler;
 import cn.wowspeeder.sw.SocketOptions;
@@ -46,6 +47,8 @@ public class SWLocal {
         SocketOptions.configure(config.getReceiveBuffer(), config.getSendBuffer());
         bossGroup = NettyTransport.newEventLoopGroup(config.getBossThreads(), "sw-local-boss");
         workerGroup = NettyTransport.newEventLoopGroup(config.getWorkerThreads(), "sw-local-worker");
+        // 周期性打印活跃连接数 / 隧道建连成功率 / DNS 缓存命中率，间隔见 stats_interval_seconds
+        ProxyStats.startReporter(workerGroup, config.getStatsIntervalSeconds());
 
         for (Map.Entry<Integer, String> portPassword : config.getPortPassword().entrySet()) {
             startSingle(config.getLocalAddress(), config.getLocalPort(),
@@ -104,6 +107,8 @@ public class SWLocal {
     }
 
     public void stop() {
+        // 停机前补打一次最终统计，避免最后一段时间的数据没被周期任务采到
+        ProxyStats.logSummary();
         if (bossGroup != null) {
             bossGroup.shutdownGracefully();
         }

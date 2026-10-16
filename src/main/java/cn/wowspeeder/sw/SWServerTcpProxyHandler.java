@@ -88,9 +88,11 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
         if (remoteChannel != null || proxyClient != null) {
             return;
         }
+        ProxyStats.targetAttempt();
         InetSocketAddress clientRecipient = clientChannel.attr(SWCommon.REMOTE_DES).get();
         if (clientRecipient == null) {
             logger.error("channel id {}, REMOTE_DES is null, can not connect target", clientChannel.id().toString());
+            ProxyStats.targetFailed();
             proxyChannelClose();
             return;
         }
@@ -131,6 +133,7 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
 
                                             @Override
                                             public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                                                ProxyStats.targetOpened();
                                                 // 目标连上时先对齐一次水位：隧道可能在建连期间就已经不可写
                                                 BackPressure.link(clientChannel, ctx.channel());
                                             }
@@ -145,6 +148,7 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
                                             @Override
                                             public void channelInactive(ChannelHandlerContext ctx) throws Exception {
                                                 super.channelInactive(ctx);
+                                                ProxyStats.targetClosed();
                                                 proxyChannelClose();
                                             }
 
@@ -167,6 +171,7 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
                             if (future.isSuccess()) {
                                 logger.debug("channel id {}, {}<->{}<->{} connect  {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), future.channel().localAddress().toString(), clientRecipient.toString(), future.isSuccess());
                                 remoteChannel = future.channel();
+                                ProxyStats.targetSucceeded();
                                 if (clientBuffs != null) {
                                     // 缓存的首包一次 syscall 批量写入，最后统一 flush，避免 N 次 writeAndFlush
                                     for (ByteBuf buf : clientBuffs) {
@@ -179,6 +184,7 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
                                 BackPressure.link(remoteChannel, clientChannel);
                             } else {
                                 logger.error("channel id {}, {}<->{} connect {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), clientRecipient.toString(), future.isSuccess(), future.cause());
+                                ProxyStats.targetFailed();
                                 proxyChannelClose();
                             }
                         } catch (Exception e) {
@@ -187,14 +193,22 @@ public class SWServerTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf
                     });
         } catch (Exception e) {
             logger.error("connect internet error", e);
+            ProxyStats.targetFailed();
             proxyChannelClose();
         }
     }
 
 
     @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        ProxyStats.tunnelOpened();
+        super.channelActive(ctx);
+    }
+
+    @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         super.channelInactive(ctx);
+        ProxyStats.tunnelClosed();
         proxyChannelClose();
     }
 

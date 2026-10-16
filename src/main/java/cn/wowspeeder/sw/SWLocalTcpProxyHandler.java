@@ -64,6 +64,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
     private void proxy(ChannelHandlerContext clientCtx, ByteBuf msg) throws Exception {
         logger.debug("channel id {},pc is null {},{}", clientChannel.id().toString(), (remoteChannel == null), msg.readableBytes());
         if (remoteChannel == null && proxyClient == null) {
+            ProxyStats.tunnelAttempt();
             // url =  ws://127.0.0.1:8080/websocket?token=123.456.44.7:8080
             Base64Encrypt base64 = Base64Encrypt.getInstance(password);
 
@@ -135,6 +136,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
                                                 @Override
                                                 public void channelActive(ChannelHandlerContext ctx) throws Exception {
+                                                    ProxyStats.tunnelOpened();
                                                     // 隧道连上时先对齐一次水位：浏览器一侧可能已经不可写
                                                     BackPressure.link(clientChannel, ctx.channel());
                                                 }
@@ -149,6 +151,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                                 @Override
                                                 public void channelInactive(ChannelHandlerContext ctx) throws Exception {
                                                     super.channelInactive(ctx);
+                                                    ProxyStats.tunnelClosed();
                                                     proxyChannelClose();
                                                 }
 
@@ -178,6 +181,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                                 if (future.isSuccess()) {
                                                     logger.debug("channel id {}, {}<->{}<->{} handshake  {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), future.channel().localAddress().toString(), ssServer.toString(), future.isSuccess());
                                                     remoteChannel = future.channel();
+                                                    ProxyStats.tunnelSucceeded();
 
                                                     //write remaining bufs
                                                     if (clientBuffs != null) {
@@ -192,6 +196,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                                     BackPressure.link(remoteChannel, clientChannel);
                                                 } else {
                                                     logger.error("channel id {}, {}<->{} handshake {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), ssServer.toString(), future.isSuccess(), future.cause());
+                                                    ProxyStats.tunnelFailed();
                                                     proxyChannelClose();
                                                 }
                                             } catch (Exception e) {
@@ -200,6 +205,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                         });
                             }else{
 //                                logger.error("channel id {}, {}<->{} connect {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), ssServer.toString(), f.isSuccess(), f.cause());
+                                ProxyStats.tunnelFailed();
                                 proxyChannelClose();
                             }
 
@@ -207,6 +213,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
              } catch (Exception e) {
                 logger.error("connect internet error", e);
+                ProxyStats.tunnelFailed();
                 proxyChannelClose();
                 return;
             }
@@ -230,8 +237,15 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
 
     @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        ProxyStats.socksOpened();
+        super.channelActive(ctx);
+    }
+
+    @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         super.channelInactive(ctx);
+        ProxyStats.socksClosed();
         proxyChannelClose();
     }
 

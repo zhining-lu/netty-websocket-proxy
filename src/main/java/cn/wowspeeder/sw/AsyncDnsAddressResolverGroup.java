@@ -135,12 +135,14 @@ public final class AsyncDnsAddressResolverGroup extends AddressResolverGroup<Ine
             // 已经是 IP 字面量就不用查了（目标填 IP 是常见配置，省一次缓存查找）
             byte[] literal = NetUtil.createByteArrayFromIpAddressString(inetHost);
             if (literal != null) {
+                ProxyStats.dnsIpLiteral();
                 promise.trySuccess(InetAddress.getByAddress(inetHost, literal));
                 return;
             }
 
             Entry cached = get(inetHost);
             if (cached != null) {
+                ProxyStats.dnsHit();
                 if (cached.failure != null) {
                     promise.tryFailure(cached.failure);
                 } else {
@@ -149,6 +151,7 @@ public final class AsyncDnsAddressResolverGroup extends AddressResolverGroup<Ine
                 return;
             }
 
+            ProxyStats.dnsMiss();
             submitResolve(inetHost, promise);
         }
 
@@ -156,12 +159,14 @@ public final class AsyncDnsAddressResolverGroup extends AddressResolverGroup<Ine
         protected void doResolveAll(String inetHost, Promise<List<InetAddress>> promise) throws Exception {
             byte[] literal = NetUtil.createByteArrayFromIpAddressString(inetHost);
             if (literal != null) {
+                ProxyStats.dnsIpLiteral();
                 promise.trySuccess(Collections.singletonList(InetAddress.getByAddress(inetHost, literal)));
                 return;
             }
 
             Entry cached = get(inetHost);
             if (cached != null) {
+                ProxyStats.dnsHit();
                 if (cached.failure != null) {
                     promise.tryFailure(cached.failure);
                 } else {
@@ -170,6 +175,7 @@ public final class AsyncDnsAddressResolverGroup extends AddressResolverGroup<Ine
                 return;
             }
 
+            ProxyStats.dnsMiss();
             submitResolveAll(inetHost, promise);
         }
 
@@ -194,6 +200,7 @@ public final class AsyncDnsAddressResolverGroup extends AddressResolverGroup<Ine
                 });
             } catch (RejectedExecutionException e) {
                 logger.warn("dns resolver pool is saturated, reject resolve of {}", host);
+                ProxyStats.dnsReject();
                 promise.tryFailure(e);
             }
         }
@@ -218,6 +225,7 @@ public final class AsyncDnsAddressResolverGroup extends AddressResolverGroup<Ine
                 });
             } catch (RejectedExecutionException e) {
                 logger.warn("dns resolver pool is saturated, reject resolveAll of {}", host);
+                ProxyStats.dnsReject();
                 promise.tryFailure(e);
             }
         }
