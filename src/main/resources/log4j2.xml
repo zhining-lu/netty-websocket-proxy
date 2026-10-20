@@ -25,11 +25,11 @@
 		<AsyncLogger name="io.netty" level="info" additivity="false"
 			includeLocation="false">
 			<AppenderRef ref="asynLogger" />
-			<AppenderRef ref="Console" />
+			<!-- <AppenderRef ref="Console" /> -->
 		</AsyncLogger>
 		<AsyncRoot level="info" includeLocation="false">
 			<AppenderRef ref="asynLogger" />
-			<AppenderRef ref="Console" />
+			<!-- <AppenderRef ref="Console" /> -->
 		</AsyncRoot>
 	</loggers>
 
