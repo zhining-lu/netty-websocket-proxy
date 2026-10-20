@@ -1,8 +1,10 @@
 package cn.wowspeeder.config;
 
 
+import cn.wowspeeder.encryption.Base64Encrypt;
 import com.google.gson.annotations.SerializedName;
 
+import java.security.GeneralSecurityException;
 import java.util.Map;
 
 public class Config {
@@ -148,7 +150,7 @@ public class Config {
 	}
 
 	/**
-	 * @return 统计日志间隔秒数；缺省 60，&le;0 表示不打印周期性统计。
+	 * 统计日志间隔秒数；缺省 60，&le;0 表示不打印周期性统计。
 	 */
 	public int getStatsIntervalSeconds() {
 		return statsIntervalSeconds == null ? 60 : statsIntervalSeconds;
@@ -156,6 +158,24 @@ public class Config {
 
 	public void setStatsIntervalSeconds(Integer statsIntervalSeconds) {
 		this.statsIntervalSeconds = statsIntervalSeconds;
+	}
+
+	/**
+	 * 预派生 token 加密密钥。
+	 * <p>
+	 * token 用 AES-256-GCM 保护，密钥由端口密码经 PBKDF2 派生（12 万次迭代）。派生只需做一次
+	 * （结果按密码缓存），但首次派生约 150ms；如果等到第一条连接才做，就会额外压在那条连接的
+	 * 握手路径上。所以在启动阶段、线程池起来之前先热身一遍，把这份开销挪到启动耗时里。
+	 * <p>
+	 * 派生失败（JDK 缺少 AES-GCM）时抛异常直接启动失败，好过让每条连接在握手时才发现。
+	 */
+	public void warmUpTokenKeys() throws GeneralSecurityException {
+		if (portPassword == null) {
+			return;
+		}
+		for (String password : portPassword.values()) {
+			Base64Encrypt.getInstance(password);
+		}
 	}
 
 }

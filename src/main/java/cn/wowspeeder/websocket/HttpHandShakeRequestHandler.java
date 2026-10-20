@@ -11,6 +11,7 @@ import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.security.GeneralSecurityException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -83,7 +84,15 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                 String password = ctx.channel().attr(SWCommon.PASSWORD).get();
                 Base64Encrypt base64 = Base64Encrypt.getInstance(password);
 
-                String targetHostAndPort = base64.getDesString(targetAddr);
+                String targetHostAndPort;
+                try {
+                    targetHostAndPort = base64.getDesString(targetAddr);
+                } catch (GeneralSecurityException e) {
+                    // AES-GCM 认证失败：密码不对，或者 token 被截断/篡改。
+                    // 故意不把具体原因回给客户端，避免成为密码猜测的提示。
+                    logger.warn("token decrypt failed from {}: {}", ctx.channel().remoteAddress(), e.getMessage());
+                    throw new UnsupportedOperationException("may be password is not right");
+                }
                 //eg: targetHostAndPort = www.baidu.com:443
                 Pattern p = Pattern.compile("^\\s*(.*?):(\\d+)\\s*$");
                 Matcher m = p.matcher(targetHostAndPort);

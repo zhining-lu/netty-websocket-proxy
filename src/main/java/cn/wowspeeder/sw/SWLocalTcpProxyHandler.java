@@ -65,13 +65,13 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
         logger.debug("channel id {},pc is null {},{}", clientChannel.id().toString(), (remoteChannel == null), msg.readableBytes());
         if (remoteChannel == null && proxyClient == null) {
             ProxyStats.tunnelAttempt();
-            // url =  ws://127.0.0.1:8080/websocket?token=123.456.44.7:8080
+            // url =  ws://127.0.0.1:8080/websocket?token=<base64url(IV||AES-256-GCM(host:port)||tag)>
+            // token 用的是 URL 安全 Base64 且不含换行，可以直接拼进 query。
             Base64Encrypt base64 = Base64Encrypt.getInstance(password);
 
             String url = "ws://"+ssServer.getHostString()+":"+ssServer.getPort()+"/websocket?token="+ base64.getEncString(remoteAddr.dstAddr()+":"+remoteAddr.dstPort());
-            //If the base64 encoding exceeds 76 characters, it will wrap, replace \n or \r in base64 encoding
             logger.debug("connect {} -> {}:{}", ssServer, remoteAddr.dstAddr(), remoteAddr.dstPort());
-            URI uri = new URI(url.replaceAll("\r|\n",""));
+            URI uri = new URI(url);
 
             final SslContext sslCtx = getSslContext(uri);
 

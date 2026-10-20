@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * P0 修复的回归测试。
@@ -56,10 +56,43 @@ public class P0RegressionTest {
         String token = encrypt.getEncString(plain);
         assertEquals(plain, encrypt.getDesString(token));
 
-        // 同一密码必须复用同一实例（避免在每条连接的热路径上重建 DES 密钥）
+        // 同一密码必须复用同一实例（PBKDF2 的 12 万次迭代不应落在每条连接的热路径上）
         assertSame(encrypt, Base64Encrypt.getInstance("889900"));
-        // DES/ECB + 固定密钥 => 同一明文产生同一密文，协议格式保持不变
-        assertEquals(token, encrypt.getEncString(plain));
+        // 与旧 DES/ECB 实现的关键差别：每次加密都用随机 IV，同一明文得到不同密文
+        assertNotEquals(token, encrypt.getEncString(plain), "每次加密应使用随机 IV，密文不应固定");
+    }
+
+    /**
+     * 旧实现是 DES/ECB + 固定密钥，同一明文永远得到同一密文，攻击者录制一个 token 就能重放。
+     * 改用 AES-GCM + 随机 IV 后，同一明文的密文必须每次都不同，但都能解回原文。
+     */
+    @Test
+    public void tokenIsNotDeterministic() throws Exception {
+        Base64Encrypt encrypt = Base64Encrypt.getInstance("889900");
+        String plain = "www.baidu.com:443";
+
+        String first = encrypt.getEncString(plain);
+        String second = encrypt.getEncString(plain);
+        assertNotEquals(first, second, "随机 IV 应让同一明文的密文不同");
+        assertEquals(plain, encrypt.getDesString(first));
+        assertEquals(plain, encrypt.getDesString(second));
+    }
+
+    /**
+     * GCM 带认证：篡改密文必须被拒绝，而不是返回一段“能解开的错误明文”。
+     */
+    @Test
+    public void tamperedTokenIsRejected() throws Exception {
+        Base64Encrypt encrypt = Base64Encrypt.getInstance("889900");
+        String token = encrypt.getEncString("www.baidu.com:443");
+
+        char[] chars = token.toCharArray();
+        // 翻转最后一个字符，落在 GCM tag 范围内
+        chars[chars.length - 1] = chars[chars.length - 1] == 'A' ? 'B' : 'A';
+        String tampered = new String(chars);
+
+        assertThrows(Exception.class, () -> encrypt.getDesString(tampered),
+                "篡改后的 token 必须解密失败");
     }
 
     /**
@@ -82,17 +115,18 @@ public class P0RegressionTest {
     }
 
     /**
-     * 原实现用 sun.misc.BASE64Encoder，密文每 76 字符会插入换行，
-     * 调用方不得不用 replaceAll("\r|\n", "") 兜底。改用 java.util.Base64 后不应再出现换行。
+     * token 要直接拼进 {@code ?token=...}，不能含换行，也不能含普通 Base64 的 {@code + / =}
+     * （{@code +} 在 query 里会被解码成空格）。
      */
     @Test
-    public void tokenMustNotContainLineBreaks() throws Exception {
+    public void tokenMustBeUrlSafeAndSingleLine() throws Exception {
         Base64Encrypt encrypt = Base64Encrypt.getInstance("889900");
         String longHost = "a-very-long-sub-domain-name-for-testing.the.example.com:443";
 
         String token = encrypt.getEncString(longHost);
-        assertTrue(token.length() > 76, "用例要求密文长度超过 76 字符，实际 " + token.length());
         assertFalse(token.indexOf('\n') >= 0 || token.indexOf('\r') >= 0, "密文中不应出现 CR/LF");
+        assertFalse(token.indexOf('+') >= 0 || token.indexOf('/') >= 0 || token.indexOf('=') >= 0,
+                "token 必须是 base64url（不含 + / =）：" + token);
         assertEquals(longHost, encrypt.getDesString(token));
     }
 }

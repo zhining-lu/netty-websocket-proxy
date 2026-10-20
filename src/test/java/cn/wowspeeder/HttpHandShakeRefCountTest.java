@@ -126,8 +126,9 @@ public class HttpHandShakeRefCountTest {
     }
 
     /**
-     * token 不是合法 Base64：{@code Base64.getDecoder().decode()} 直接抛
-     * IllegalArgumentException —— 异常发生在本类为「自己没交出去」的 msg 兜底释放之后仍必须生效。
+     * token 不是合法 Base64：解码失败后统一按「密码不对」抛
+     * UnsupportedOperationException（见 HttpHandShakeRequestHandler，不让异常类型泄露失败原因）。
+     * 本用例真正要保证的是：异常发生在本类为「自己没交出去」的 msg 兜底释放时仍然生效。
      */
     @Test
     public void invalidBase64TokenMustReleaseRequest() {
@@ -137,7 +138,9 @@ public class HttpHandShakeRefCountTest {
         assertEquals(1, request.refCnt(), "投喂前引用计数");
 
         Throwable t = writeInboundExpectingFailure(channel, request);
-        assertTrue(t instanceof IllegalArgumentException, "期望 IllegalArgumentException，实际：" + t);
+        assertTrue(t instanceof UnsupportedOperationException, "期望 UnsupportedOperationException，实际：" + t);
+        assertTrue(t.getMessage().contains("password is not right"),
+                "应当是密码不对的提示，实际：" + t.getMessage());
         assertReleasedAndNotForwarded(request, capture);
 
         channel.close();

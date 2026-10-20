@@ -44,6 +44,8 @@ public class SWServer {
     public void start(String configPath) throws Exception {
         final Config config = ConfigLoader.load(configPath);
         logger.info("load config !");
+        // 提前跑一次 PBKDF2 派生 token 密钥，避免首个连接额外多出约 150ms 的 token 校验延迟
+        config.warmUpTokenKeys();
 
         NettyTransport.init(config.isUseEpoll(), config.isSoReuseport());
         // socket 缓冲区默认不设，交给内核按实测 BDP 自动调优；只有配置显式给了值才设。
