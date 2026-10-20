@@ -22,6 +22,8 @@
 		<slf4j.version>1.7.36</slf4j.version>
 		<!-- log4j2 的 AsyncLogger / AsyncRoot 需要 disruptor，2.20 起要求 3.4.x -->
 		<disruptor.version>3.4.4</disruptor.version>
+		<!-- bcprov-jdk15on 停在 1.70，1.71 起改名 bcprov-jdk18on（JDK 1.8+） -->
+		<bcprov.version>1.86</bcprov.version>
 	</properties>
 
 	<build>
@@ -153,10 +155,18 @@
 			<classifier>linux-aarch_64</classifier>
 			<scope>runtime</scope>
 		</dependency>
+		<!--
+			Bouncy Castle：encryption 包里的 7 种 shadowsocks 加密算法全靠它（JDK 没有 Camellia /
+			SEED / Blowfish 的标准实现，且 BC 的轻量 API 可流式 processBytes，适合代理热路径）。
+			注意 artifact 改名：bcprov-jdk15on 停在 1.70 不再更新，1.71 起叫 bcprov-jdk18on
+			（"jdk18on" = JDK 1.8 以上，不是 Java 18）。1.86 的 base class 仍是 major 52，
+			META-INF/versions 里是多 JDK 的 MR-Jar，Java 8 会忽略，不影响 source/target=1.8。
+			包名 org.bouncycastle.* 未变，代码零改动。
+		-->
 		<dependency>
 			<groupId>org.bouncycastle</groupId>
-			<artifactId>bcprov-jdk15on</artifactId>
-			<version>1.67</version>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>${bcprov.version}</version>
 		</dependency>
 		<!--
 			tink：钉在 1.18.0 —— 这是最后一个 Java 8 字节码的版本（class major 52）；1.19.0 起
