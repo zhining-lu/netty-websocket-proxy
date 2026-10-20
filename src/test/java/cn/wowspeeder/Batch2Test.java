@@ -8,9 +8,10 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.embedded.EmbeddedChannel;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.EventLoop;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
+import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.resolver.AddressResolver;
 import io.netty.util.concurrent.MultithreadEventExecutorGroup;
 import org.junit.After;
@@ -31,7 +32,8 @@ import static org.junit.Assert.assertTrue;
  */
 public class Batch2Test {
 
-    private final NioEventLoopGroup group = new NioEventLoopGroup(1);
+    private final MultiThreadIoEventLoopGroup group =
+            new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
 
     @After
     public void tearDown() {

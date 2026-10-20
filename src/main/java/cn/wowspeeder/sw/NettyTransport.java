@@ -3,13 +3,14 @@ package cn.wowspeeder.sw;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.ServerChannel;
 import io.netty.channel.epoll.Epoll;
 import io.netty.channel.epoll.EpollChannelOption;
-import io.netty.channel.epoll.EpollEventLoopGroup;
+import io.netty.channel.epoll.EpollIoHandler;
 import io.netty.channel.epoll.EpollServerSocketChannel;
 import io.netty.channel.epoll.EpollSocketChannel;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.concurrent.DefaultThreadFactory;
@@ -91,9 +92,13 @@ public final class NettyTransport {
     public static EventLoopGroup newEventLoopGroup(int threads, String threadNamePrefix) {
         int nThreads = Math.max(threads, 0);
         DefaultThreadFactory threadFactory = new DefaultThreadFactory(threadNamePrefix);
+        // Netty 4.2 起 NioEventLoopGroup / EpollEventLoopGroup 都已 @Deprecated，
+        // 统一改成 MultiThreadIoEventLoopGroup + IoHandlerFactory 的写法：
+        // 线程模型、默认线程数（2 * CPU）、非 daemon 语义都与原来的 deprecated 类完全一致
+        // （那两个类现在本身就是这个构造方式的薄壳）。
         return epoll
-                ? new EpollEventLoopGroup(nThreads, threadFactory)
-                : new NioEventLoopGroup(nThreads, threadFactory);
+                ? new MultiThreadIoEventLoopGroup(nThreads, threadFactory, EpollIoHandler.newFactory())
+                : new MultiThreadIoEventLoopGroup(nThreads, threadFactory, NioIoHandler.newFactory());
     }
 
     public static Class<? extends ServerChannel> serverChannelClass() {

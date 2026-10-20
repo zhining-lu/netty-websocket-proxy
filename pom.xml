@@ -12,6 +12,8 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<!-- netty 版本统一在这里控制，各模块不再各自写版本号 -->
+		<netty.version>4.2.19.Final</netty.version>
 	</properties>
 
 	<build>
@@ -66,10 +68,76 @@
 	</build>
 
 	<dependencies>
+		<!--
+			Netty 4.2 起 netty-all 已变成"空壳"聚合包：jar 里只有 META-INF，真实依赖全靠 pom 传递，
+			并且会把 epoll / kqueue / io_uring / QUIC 的全平台 native 包一起拖进来（约 50 个 jar）。
+			所以这里改成只声明本项目真正用到的模块，发行包体积与 4.1 时期的 netty-all 基本持平。
+			以后新增 netty 用法时记得回来补模块，否则编译期会报「找不到包」。
+		-->
 		<dependency>
 			<groupId>io.netty</groupId>
-			<artifactId>netty-all</artifactId>
-			<version>4.1.42.Final</version>
+			<artifactId>netty-common</artifactId>
+			<version>${netty.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-buffer</artifactId>
+			<version>${netty.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-transport</artifactId>
+			<version>${netty.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-resolver</artifactId>
+			<version>${netty.version}</version>
+		</dependency>
+		<!-- 4.2 把 MessageToMessageCodec / MessageToByteEncoder 等基类拆到了 netty-codec-base -->
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-codec-base</artifactId>
+			<version>${netty.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-codec-http</artifactId>
+			<version>${netty.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-codec-socks</artifactId>
+			<version>${netty.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-handler</artifactId>
+			<version>${netty.version}</version>
+		</dependency>
+		<!--
+			epoll 分两个 jar：classes 提供 EpollSocketChannel / EpollIoHandler 等 Java 类，
+			native 提供 .so。4.2 起 unix-common 的 native 代码已静态并入各 transport 的 .so，
+			所以只需带 epoll 的 classifier 包；缺了它 Epoll.isAvailable() 会返回 false 并自动回退 NIO。
+		-->
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-transport-classes-epoll</artifactId>
+			<version>${netty.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-transport-native-epoll</artifactId>
+			<version>${netty.version}</version>
+			<classifier>linux-x86_64</classifier>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.netty</groupId>
+			<artifactId>netty-transport-native-epoll</artifactId>
+			<version>${netty.version}</version>
+			<classifier>linux-aarch_64</classifier>
+			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.bouncycastle</groupId>

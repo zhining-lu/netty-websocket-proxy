@@ -11,7 +11,8 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
@@ -51,8 +52,9 @@ public class Batch2EndToEndHostnameTest {
     private static final String PASSWORD = "889900";
     private static final int TIMEOUT_SECONDS = 10;
 
-    private static final EventLoopGroup BOSS = new NioEventLoopGroup(1);
-    private static final EventLoopGroup WORKER = new NioEventLoopGroup(2);
+    // Netty 4.2 起 NioEventLoopGroup 已 deprecated，改用 MultiThreadIoEventLoopGroup + NioIoHandler
+    private static final EventLoopGroup BOSS = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
+    private static final EventLoopGroup WORKER = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
 
     @AfterClass
     public static void tearDownClass() {

@@ -7,7 +7,8 @@ import io.netty.bootstrap.ServerBootstrap;
 import io.netty.bootstrap.ServerBootstrapConfig;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import org.junit.After;
@@ -181,7 +182,7 @@ public class SocketOptionsTest {
      */
     @Test
     public void appliesToRealChannelConfig() {
-        NioEventLoopGroup group = new NioEventLoopGroup(1);
+        MultiThreadIoEventLoopGroup group = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
         try {
             SocketOptions.configure(256 * 1024, 512 * 1024);
             Bootstrap bootstrap = new Bootstrap()
