@@ -105,16 +105,6 @@ sysctl -w net.core.wmem_max=16777216
 （成功 60s、失败 5s），不会阻塞 event loop。若遇到解析异常，先确认目标地址没有写错——
 密码不对时服务端会在解密阶段就失败，不会走到解析。
 
-**多端口时的本地端口分配规则**（客户端）：`port_password` 里的每个远端端口都需要一个独立的本地
-SOCKS5 监听端口，因此按**远端端口升序**依次分配 `local_port`、`local_port + 1`、`local_port + 2` …
-
-例如客户端配置 `local_port = 18080`、`port_password = {"80": "a", "443": "b"}`，启动后会得到：
-
-```
-SOCKS5 127.0.0.1:18080  ->  远端 80
-SOCKS5 127.0.0.1:18081  ->  远端 443
-```
-
 **UDP 未实现**：项目只做 TCP 转发。客户端发起 SOCKS5 `UDP_ASSOCIATE` 时，本地端会返回
 `COMMAND_UNSUPPORTED (0x07)` 并关闭连接，请让客户端回退到 TCP（历史上这里错误地返回 `SUCCESS`，
 导致 UDP 数据被静默丢弃）。
