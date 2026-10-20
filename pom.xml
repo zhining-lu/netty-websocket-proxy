@@ -158,10 +158,19 @@
 			<artifactId>bcprov-jdk15on</artifactId>
 			<version>1.67</version>
 		</dependency>
+		<!--
+			tink：钉在 1.18.0 —— 这是最后一个 Java 8 字节码的版本（class major 52）；1.19.0 起
+			pom 的 java.version 改成 11，会直接破掉本项目的 source/target=1.8 与 release 8 编译校验。
+			1.18 的额外收益：
+			  · 不再依赖 org.json（旧 json-20180813.jar 就是从 tink 1.5.0 传进来的），改用 gson；
+			  · protobuf-java 从 3.11.1 升到 4.28.2（仍是 major 52），甩掉一批旧版 CVE。
+			实际传递依赖只有 protobuf-java / jsr305 / error_prone_annotations 三个，
+			google-http-client 不会进依赖树，所以 lib/ 里不会有 guava、httpclient、opencensus。
+		-->
 		<dependency>
 			<groupId>com.google.crypto.tink</groupId>
 			<artifactId>tink</artifactId>
-			<version>1.5.0</version>
+			<version>1.18.0</version>
 		</dependency>
 		<!--
 			日志：Netty 的 InternalLoggerFactory 探测顺序是 SLF4J → Log4J2 → JUL，
