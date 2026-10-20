@@ -14,6 +14,14 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!-- netty 版本统一在这里控制，各模块不再各自写版本号 -->
 		<netty.version>4.2.19.Final</netty.version>
+		<!--
+			日志三件套统一在这里控制。log4j-api 与 log4j-core 必须同版本，
+			log4j-slf4j-impl 也必须跟 core 对齐（历史上它落后到 2.13.2）。
+		-->
+		<log4j.version>2.26.1</log4j.version>
+		<slf4j.version>1.7.36</slf4j.version>
+		<!-- log4j2 的 AsyncLogger / AsyncRoot 需要 disruptor，2.20 起要求 3.4.x -->
+		<disruptor.version>3.4.4</disruptor.version>
 	</properties>
 
 	<build>
@@ -155,20 +163,33 @@
 			<artifactId>tink</artifactId>
 			<version>1.5.0</version>
 		</dependency>
+		<!--
+			日志：Netty 的 InternalLoggerFactory 探测顺序是 SLF4J → Log4J2 → JUL，
+			所以实际链路是 InternalLogger → slf4j-api → log4j-slf4j-impl → log4j-core。
+			源码里不要直接 import log4j / slf4j，统一用 io.netty.util.internal.logging.InternalLogger。
+			2.x 每个 jar 的 base class 仍是 major 52（Java 8），META-INF/versions/9 是 MR-Jar，
+			Java 8 会忽略，所以不破坏本项目的 1.8 编译目标。
+		-->
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-core</artifactId>
-			<version>2.17.1</version>
+			<version>${log4j.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-slf4j-impl</artifactId>
-			<version>2.13.2</version>
+			<version>${log4j.version}</version>
+		</dependency>
+		<!-- 显式声明，避免跟着传递依赖漂到更老的 1.7.x -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>${slf4j.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.lmax</groupId>
 			<artifactId>disruptor</artifactId>
-			<version>3.3.4</version>
+			<version>${disruptor.version}</version>
 		</dependency>
 		<!-- https://mvnrepository.com/artifact/com.google.code.gson/gson -->
 		<dependency>
