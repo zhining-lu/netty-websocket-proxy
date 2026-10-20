@@ -6,12 +6,12 @@ import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.http.DefaultHttpHeaders;
 import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory;
 import io.netty.handler.codec.http.websocketx.WebSocketVersion;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * 回归测试：{@link WebSocketClientHandler} 不能吞掉 {@code channelActive}。
@@ -53,10 +53,10 @@ public class WebSocketClientChannelActiveTest {
         // EmbeddedChannel 构造完成即处于 active 状态，会向下游触发一次 channelActive。
         EmbeddedChannel channel = new EmbeddedChannel(wsHandler, downstreamCounter);
 
-        assertEquals("channelActive 必须越过 WebSocketClientHandler 传到底", 1, activeCount.get());
+        assertEquals(1, activeCount.get(), "channelActive 必须越过 WebSocketClientHandler 传到底");
 
         channel.finishAndReleaseAll();
-        assertEquals("channelInactive 同样只应触发一次", 1, inactiveCount.get());
-        assertEquals("一次 active 必须严格对应一次 inactive", activeCount.get(), inactiveCount.get());
+        assertEquals(1, inactiveCount.get(), "channelInactive 同样只应触发一次");
+        assertEquals(activeCount.get(), inactiveCount.get(), "一次 active 必须严格对应一次 inactive");
     }
 }

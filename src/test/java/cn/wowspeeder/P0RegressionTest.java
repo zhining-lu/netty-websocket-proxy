@@ -6,15 +6,15 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.embedded.EmbeddedChannel;
 import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * P0 修复的回归测试。
@@ -40,12 +40,12 @@ public class P0RegressionTest {
         channel.writeInbound(new BinaryWebSocketFrame(payload));
 
         ByteBuf out = channel.readInbound();
-        assertNotNull("decode 应当产出一个 ByteBuf", out);
-        assertEquals("decode 只允许 retain 一次", 1, out.refCnt());
+        assertNotNull(out, "decode 应当产出一个 ByteBuf");
+        assertEquals(1, out.refCnt(), "decode 只允许 retain 一次");
 
         // 下游的 relay handler 只会 release 一次
         out.release();
-        assertEquals("消费者 release 之后引用计数必须归零，否则就是泄漏", 0, out.refCnt());
+        assertEquals(0, out.refCnt(), "消费者 release 之后引用计数必须归零，否则就是泄漏");
     }
 
     @Test
@@ -70,12 +70,12 @@ public class P0RegressionTest {
     public void base64EncryptIsolatesDifferentPasswords() throws Exception {
         Base64Encrypt a = Base64Encrypt.getInstance("889900");
         Base64Encrypt b = Base64Encrypt.getInstance("889901");
-        assertNotSame("不同密码必须对应不同实例", a, b);
+        assertNotSame(a, b, "不同密码必须对应不同实例");
 
         String plain = "www.baidu.com:443";
         String tokenB = b.getEncString(plain);
         try {
-            assertNotEquals("不同密码的密文不应能互相解开", plain, a.getDesString(tokenB));
+            assertNotEquals(plain, a.getDesString(tokenB), "不同密码的密文不应能互相解开");
         } catch (Exception expected) {
             // 解密直接失败同样说明密码已隔离
         }
@@ -91,8 +91,8 @@ public class P0RegressionTest {
         String longHost = "a-very-long-sub-domain-name-for-testing.the.example.com:443";
 
         String token = encrypt.getEncString(longHost);
-        assertTrue("用例要求密文长度超过 76 字符，实际 " + token.length(), token.length() > 76);
-        assertFalse("密文中不应出现 CR/LF", token.indexOf('\n') >= 0 || token.indexOf('\r') >= 0);
+        assertTrue(token.length() > 76, "用例要求密文长度超过 76 字符，实际 " + token.length());
+        assertFalse(token.indexOf('\n') >= 0 || token.indexOf('\r') >= 0, "密文中不应出现 CR/LF");
         assertEquals(longHost, encrypt.getDesString(token));
     }
 }

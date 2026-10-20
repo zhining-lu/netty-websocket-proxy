@@ -16,8 +16,8 @@ import io.netty.channel.nio.NioIoHandler;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
-import org.junit.AfterClass;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -30,9 +30,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * 端到端验证「目标地址是域名」这条路径。
@@ -56,7 +56,7 @@ public class Batch2EndToEndHostnameTest {
     private static final EventLoopGroup BOSS = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
     private static final EventLoopGroup WORKER = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
 
-    @AfterClass
+    @AfterAll
     public static void tearDownClass() {
         BOSS.shutdownGracefully();
         WORKER.shutdownGracefully();
@@ -140,15 +140,15 @@ public class Batch2EndToEndHostnameTest {
 
             InputStream in = client.getInputStream();
             String responseHead = readHttpHead(in);
-            assertTrue("握手必须成功，实际响应头：\n" + responseHead,
-                    responseHead.startsWith("HTTP/1.1 101"));
+            assertTrue(responseHead.startsWith("HTTP/1.1 101"),
+                    "握手必须成功，实际响应头：\n" + responseHead);
 
             // 隧道通了以后发一帧业务数据，服务端应当把它写进「localhost:targetPort」
             out.write(binaryFrame("PING-OVER-WS".getBytes("UTF-8")));
             out.flush();
 
-            assertTrue("目标服务器应当收到业务数据（说明域名被解析并连上了）",
-                    targetGotData.await(TIMEOUT_SECONDS, TimeUnit.SECONDS));
+            assertTrue(targetGotData.await(TIMEOUT_SECONDS, TimeUnit.SECONDS),
+                    "目标服务器应当收到业务数据（说明域名被解析并连上了）");
             assertEquals("PING-OVER-WS", receivedByTarget.get());
 
             // 目标回 WORLD，经隧道回到客户端
@@ -211,9 +211,9 @@ public class Batch2EndToEndHostnameTest {
             fail("还没收到数据帧连接就断了");
         }
         int opcode = b0 & 0x0F;
-        assertEquals("期望二进制帧，实际 opcode=" + opcode, 0x2, opcode);
+        assertEquals(0x2, opcode, "期望二进制帧，实际 opcode=" + opcode);
         int length = b1 & 0x7F;
-        assertTrue("本用例只处理短帧", length < 126);
+        assertTrue(length < 126, "本用例只处理短帧");
         byte[] payload = new byte[length];
         int read = 0;
         while (read < length) {

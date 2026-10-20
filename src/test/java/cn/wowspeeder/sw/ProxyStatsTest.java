@@ -1,10 +1,10 @@
 package cn.wowspeeder.sw;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@link ProxyStats} 的计数与格式回归测试。
@@ -71,13 +71,13 @@ public class ProxyStatsTest {
     @Test
     public void summaryHasAllSectionsAndNoNaN() {
         String s = ProxyStats.summary();
-        assertTrue(s, s.contains("active["));
-        assertTrue(s, s.contains("tunnelConnect["));
-        assertTrue(s, s.contains("targetConnect["));
-        assertTrue(s, s.contains("dns["));
-        assertTrue(s, s.contains("hitRate="));
+        assertTrue(s.contains("active["), s);
+        assertTrue(s.contains("tunnelConnect["), s);
+        assertTrue(s.contains("targetConnect["), s);
+        assertTrue(s.contains("dns["), s);
+        assertTrue(s.contains("hitRate="), s);
         // 分母为 0 时必须是 n/a，不能出现 NaN / Infinity
-        assertFalse(s, s.contains("NaN"));
-        assertFalse(s, s.contains("Infinity"));
+        assertFalse(s.contains("NaN"), s);
+        assertFalse(s.contains("Infinity"), s);
     }
 }

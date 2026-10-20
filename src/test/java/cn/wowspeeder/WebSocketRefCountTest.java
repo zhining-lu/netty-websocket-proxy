@@ -22,7 +22,7 @@ import io.netty.handler.codec.http.websocketx.CloseWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketClientHandshaker;
 import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory;
 import io.netty.handler.codec.http.websocketx.WebSocketVersion;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -31,9 +31,9 @@ import java.util.Base64;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * SWLocal（客户端）入站链路的引用计数回归测试。
@@ -114,9 +114,9 @@ public class WebSocketRefCountTest {
             // channelActive -> handshaker.handshake()：管道里必须有 HttpResponseDecoder/HttpClientCodec，
             // 否则 Netty 只会把 handshakeFuture 置为失败而不发请求。
             HttpRequest request = spy.request.get();
-            assertNotNull("channelActive 应当已经发出 WS 握手请求", request);
+            assertNotNull(request, "channelActive 应当已经发出 WS 握手请求");
             String key = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_KEY);
-            assertNotNull("握手请求里必须带 Sec-WebSocket-Key", key);
+            assertNotNull(key, "握手请求里必须带 Sec-WebSocket-Key");
 
             FullHttpResponse response = new DefaultFullHttpResponse(
                     HttpVersion.HTTP_1_1, HttpResponseStatus.SWITCHING_PROTOCOLS);
@@ -128,7 +128,7 @@ public class WebSocketRefCountTest {
 
             // checkException() 为 void：管道里记录过异常时会直接把原始异常抛出来
             channel.checkException();
-            assertTrue("握手应当成功，否则后续用例没有意义", clientHandler.handshakeFuture().isSuccess());
+            assertTrue(clientHandler.handshakeFuture().isSuccess(), "握手应当成功，否则后续用例没有意义");
         }
 
         private static String acceptOf(String key) throws Exception {
@@ -150,13 +150,13 @@ public class WebSocketRefCountTest {
         ClientPipeline pipeline = new ClientPipeline();
         ByteBuf payload = Unpooled.buffer();
         payload.writeBytes(new byte[]{1, 2, 3, 4});
-        assertEquals("入站帧的初始引用计数", 1, payload.refCnt());
+        assertEquals(1, payload.refCnt(), "入站帧的初始引用计数");
 
         pipeline.channel.writeInbound(new BinaryWebSocketFrame(payload));
 
         pipeline.channel.checkException();
-        assertEquals("帧应当被转发到 relay", 1, pipeline.relay.received.get());
-        assertEquals("retain/release 必须配平，链路走完后不应残留引用", 0, payload.refCnt());
+        assertEquals(1, pipeline.relay.received.get(), "帧应当被转发到 relay");
+        assertEquals(0, payload.refCnt(), "retain/release 必须配平，链路走完后不应残留引用");
 
         pipeline.channel.close();
     }
@@ -170,12 +170,12 @@ public class WebSocketRefCountTest {
         ClientPipeline pipeline = new ClientPipeline();
         CloseWebSocketFrame frame = new CloseWebSocketFrame(1000, "bye");
         ByteBuf content = frame.content();
-        assertEquals("入站帧的初始引用计数", 1, content.refCnt());
+        assertEquals(1, content.refCnt(), "入站帧的初始引用计数");
 
         pipeline.channel.writeInbound(frame);
 
         pipeline.channel.checkException();
-        assertEquals("Close 帧的内容必须被释放干净", 0, content.refCnt());
+        assertEquals(0, content.refCnt(), "Close 帧的内容必须被释放干净");
 
         pipeline.channel.close();
     }

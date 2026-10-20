@@ -3,14 +3,14 @@ package cn.wowspeeder.sw;
 import cn.wowspeeder.sw.SocksCommonUtils;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 public class SocksCommonUtilsTest {
 
 	@Test
 	public void testIntToIp() {
-		Assert.assertEquals("11.8.0.8",
+		Assertions.assertEquals("11.8.0.8",
 			SocksCommonUtils.intToIp(185_073_672));
 	}
 
@@ -20,7 +20,7 @@ public class SocksCommonUtilsTest {
 			1, 2, 4, 8, 16, 32, 64, 127, -1, -2,
 			-4, -16, -32, -64, -128, 0};
 
-		Assert.assertEquals(
+		Assertions.assertEquals(
 			"102:408:1020:407f:fffe:fcf0:e0c0:8000",
 			SocksCommonUtils.ipv6toCompressedForm(bytes)
 		);
@@ -32,7 +32,7 @@ public class SocksCommonUtilsTest {
 			0, 0, 0, 0, 0, 0, 0, 0, 0,
 			0, 0, 2, 4, 8, 16, 32};
 
-		Assert.assertEquals(
+		Assertions.assertEquals(
 			"0::2:408:1020",
 			SocksCommonUtils.ipv6toCompressedForm(bytes)
 		);
@@ -44,7 +44,7 @@ public class SocksCommonUtilsTest {
 			0, 0, 0, 0, 0, 0, 0, 0, 0,
 			0, 0, 2, 4, 8, 16, 32};
 
-		Assert.assertEquals(
+		Assertions.assertEquals(
 			"0:0:0:0:0:2:408:1020",
 			SocksCommonUtils.ipv6toStr(bytes));
 	}
@@ -54,7 +54,7 @@ public class SocksCommonUtilsTest {
 		final ByteBuf buffer = Unpooled.copiedBuffer(
 			new byte[]{'f', 'o', 'o'});
 
-		Assert.assertEquals(
+		Assertions.assertEquals(
 			"foo",
 			SocksCommonUtils.readUsAscii(buffer, 3)
 		);

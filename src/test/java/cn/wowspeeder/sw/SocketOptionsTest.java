@@ -11,14 +11,14 @@ import io.netty.channel.MultiThreadIoEventLoopGroup;
 import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import org.junit.After;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * SO_RCVBUF / SO_SNDBUF 配置行为的回归测试。
@@ -46,7 +46,7 @@ public class SocketOptionsTest {
         return config.childOptions().get(key);
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         reset();
     }
@@ -54,23 +54,23 @@ public class SocketOptionsTest {
     @Test
     public void defaultStateDoesNotSetAnything() {
         reset();
-        assertFalse("默认必须不是「显式配置」状态", SocketOptions.isExplicit());
-        assertEquals("未配置时 SO_RCVBUF 应为 0（表示不设）", 0, SocketOptions.receiveBuffer());
-        assertEquals("未配置时 SO_SNDBUF 应为 0（表示不设）", 0, SocketOptions.sendBuffer());
+        assertFalse(SocketOptions.isExplicit(), "默认必须不是「显式配置」状态");
+        assertEquals(0, SocketOptions.receiveBuffer(), "未配置时 SO_RCVBUF 应为 0（表示不设）");
+        assertEquals(0, SocketOptions.sendBuffer(), "未配置时 SO_SNDBUF 应为 0（表示不设）");
 
         Bootstrap bootstrap = new Bootstrap();
         SocketOptions.applySend(bootstrap);
-        assertNull("默认不应给 Bootstrap 设置 SO_SNDBUF",
-                option(bootstrap.config(), ChannelOption.SO_SNDBUF));
-        assertNull("默认不应给 Bootstrap 设置 SO_RCVBUF",
-                option(bootstrap.config(), ChannelOption.SO_RCVBUF));
+        assertNull(option(bootstrap.config(), ChannelOption.SO_SNDBUF),
+                "默认不应给 Bootstrap 设置 SO_SNDBUF");
+        assertNull(option(bootstrap.config(), ChannelOption.SO_RCVBUF),
+                "默认不应给 Bootstrap 设置 SO_RCVBUF");
 
         ServerBootstrap server = new ServerBootstrap();
         SocketOptions.applyChild(server);
-        assertNull("默认不应给 ServerBootstrap 的 child 设置 SO_SNDBUF",
-                childOption(server.config(), ChannelOption.SO_SNDBUF));
-        assertNull("默认不应给 ServerBootstrap 的 child 设置 SO_RCVBUF",
-                childOption(server.config(), ChannelOption.SO_RCVBUF));
+        assertNull(childOption(server.config(), ChannelOption.SO_SNDBUF),
+                "默认不应给 ServerBootstrap 的 child 设置 SO_SNDBUF");
+        assertNull(childOption(server.config(), ChannelOption.SO_RCVBUF),
+                "默认不应给 ServerBootstrap 的 child 设置 SO_RCVBUF");
     }
 
     @Test
@@ -80,8 +80,8 @@ public class SocketOptionsTest {
         assertEquals(0, SocketOptions.sendBuffer());
 
         SocketOptions.configure(0, -1);
-        assertEquals("0 表示不设", 0, SocketOptions.receiveBuffer());
-        assertEquals("负数表示不设", 0, SocketOptions.sendBuffer());
+        assertEquals(0, SocketOptions.receiveBuffer(), "0 表示不设");
+        assertEquals(0, SocketOptions.sendBuffer(), "负数表示不设");
         assertFalse(SocketOptions.isExplicit());
 
         SocketOptions.configure(-4096, -4096);
@@ -108,11 +108,10 @@ public class SocketOptionsTest {
         ServerBootstrap server = new ServerBootstrap();
         SocketOptions.applyChild(server);
 
-        assertEquals("只配了 rcvbuf，sndbuf 必须保持不设",
-                Integer.valueOf(256 * 1024),
-                childOption(server.config(), ChannelOption.SO_RCVBUF));
-        assertNull("只配了 rcvbuf，sndbuf 必须保持不设",
-                childOption(server.config(), ChannelOption.SO_SNDBUF));
+        assertEquals(Integer.valueOf(256 * 1024), childOption(server.config(), ChannelOption.SO_RCVBUF),
+                "只配了 rcvbuf，sndbuf 必须保持不设");
+        assertNull(childOption(server.config(), ChannelOption.SO_SNDBUF),
+                "只配了 rcvbuf，sndbuf 必须保持不设");
     }
 
     /** 两个方向可以独立开关。 */
@@ -133,13 +132,13 @@ public class SocketOptionsTest {
     @Test
     public void configDefaultsAreNull() {
         Config config = new Config();
-        assertNull("未配置 receive_buffer 时应为 null", config.getReceiveBuffer());
-        assertNull("未配置 send_buffer 时应为 null", config.getSendBuffer());
+        assertNull(config.getReceiveBuffer(), "未配置 receive_buffer 时应为 null");
+        assertNull(config.getSendBuffer(), "未配置 send_buffer 时应为 null");
 
         config.setReceiveBuffer(0);
         config.setSendBuffer(-8);
-        assertNull("非正数应归一化为 null", config.getReceiveBuffer());
-        assertNull("非正数应归一化为 null", config.getSendBuffer());
+        assertNull(config.getReceiveBuffer(), "非正数应归一化为 null");
+        assertNull(config.getSendBuffer(), "非正数应归一化为 null");
 
         config.setReceiveBuffer(524288);
         assertEquals(Integer.valueOf(524288), config.getReceiveBuffer());
@@ -172,8 +171,8 @@ public class SocketOptionsTest {
     public void constantsAreSane() {
         assertEquals(208 * 1024, SocketOptions.KERNEL_DEFAULT_MAX);
         assertEquals(2, SocketOptions.KERNEL_BUFFER_MULTIPLIER);
-        assertTrue("推荐最小值必须高于内核默认上限，否则会被截断",
-                SocketOptions.RECOMMENDED_MIN > SocketOptions.KERNEL_DEFAULT_MAX);
+        assertTrue(SocketOptions.RECOMMENDED_MIN > SocketOptions.KERNEL_DEFAULT_MAX,
+                "推荐最小值必须高于内核默认上限，否则会被截断");
     }
 
     /**
@@ -193,10 +192,10 @@ public class SocketOptionsTest {
 
             Channel ch = bootstrap.register().channel();
             try {
-                assertEquals("SO_RCVBUF 必须真正落到 channel 的 config 上",
-                        Integer.valueOf(256 * 1024), ch.config().getOption(ChannelOption.SO_RCVBUF));
-                assertEquals("SO_SNDBUF 必须真正落到 channel 的 config 上",
-                        Integer.valueOf(512 * 1024), ch.config().getOption(ChannelOption.SO_SNDBUF));
+                assertEquals(Integer.valueOf(256 * 1024), ch.config().getOption(ChannelOption.SO_RCVBUF),
+                        "SO_RCVBUF 必须真正落到 channel 的 config 上");
+                assertEquals(Integer.valueOf(512 * 1024), ch.config().getOption(ChannelOption.SO_SNDBUF),
+                        "SO_SNDBUF 必须真正落到 channel 的 config 上");
             } finally {
                 ch.close().syncUninterruptibly();
             }
@@ -212,7 +211,7 @@ public class SocketOptionsTest {
         server.channel(NioServerSocketChannel.class);
         server.option(ChannelOption.SO_RCVBUF, 2 * 1024 * 1024);
 
-        assertNull("父 channel 的 option 不应出现在 childOption 上（原 bug 的根因）",
-                childOption(server.config(), ChannelOption.SO_RCVBUF));
+        assertNull(childOption(server.config(), ChannelOption.SO_RCVBUF),
+                "父 channel 的 option 不应出现在 childOption 上（原 bug 的根因）");
     }
 }

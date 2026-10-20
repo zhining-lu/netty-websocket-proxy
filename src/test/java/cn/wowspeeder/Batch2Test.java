@@ -14,18 +14,18 @@ import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.resolver.AddressResolver;
 import io.netty.util.concurrent.MultithreadEventExecutorGroup;
-import org.junit.After;
-import org.junit.Assume;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 第二批优化（中等成本）的回归测试：异步 DNS、写队列背压、传输层选择。
@@ -35,7 +35,7 @@ public class Batch2Test {
     private final MultiThreadIoEventLoopGroup group =
             new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
 
-    @After
+    @AfterEach
     public void tearDown() {
         group.shutdownGracefully();
         AsyncDnsAddressResolverGroup.INSTANCE.clearCache();
@@ -53,10 +53,10 @@ public class Batch2Test {
      */
     @Test
     public void plainInetSocketAddressResolvesEagerlyButCreateUnresolvedDoesNot() {
-        assertFalse("new InetSocketAddress(...) 构造时就查了 DNS —— 这正是要避免的",
-                new InetSocketAddress("localhost", 80).isUnresolved());
-        assertTrue("createUnresolved 不做任何 DNS",
-                InetSocketAddress.createUnresolved("localhost", 80).isUnresolved());
+        assertFalse(new InetSocketAddress("localhost", 80).isUnresolved(),
+                "new InetSocketAddress(...) 构造时就查了 DNS —— 这正是要避免的");
+        assertTrue(InetSocketAddress.createUnresolved("localhost", 80).isUnresolved(),
+                "createUnresolved 不做任何 DNS");
     }
 
     /**
@@ -69,11 +69,11 @@ public class Batch2Test {
         AddressResolver<InetSocketAddress> resolver = AsyncDnsAddressResolverGroup.INSTANCE.getResolver(loop);
 
         InetSocketAddress unresolved = InetSocketAddress.createUnresolved("localhost", 8080);
-        assertFalse("未解析地址必须走 resolver 分支", resolver.isResolved(unresolved));
+        assertFalse(resolver.isResolved(unresolved), "未解析地址必须走 resolver 分支");
 
         InetSocketAddress resolved = resolver.resolve(unresolved).sync().getNow();
-        assertFalse("解析后不应仍是 unresolved", resolved.isUnresolved());
-        assertEquals("端口必须原样保留", 8080, resolved.getPort());
+        assertFalse(resolved.isUnresolved(), "解析后不应仍是 unresolved");
+        assertEquals(8080, resolved.getPort(), "端口必须原样保留");
         assertEquals(InetAddress.getByName("localhost"), resolved.getAddress());
     }
 
@@ -88,13 +88,13 @@ public class Batch2Test {
 
         InetSocketAddress first = resolver.resolve(
                 InetSocketAddress.createUnresolved("localhost", 80)).sync().getNow();
-        assertEquals("一次未命中解析应当只留下一条缓存", 1, resolverGroup.cacheSize());
+        assertEquals(1, resolverGroup.cacheSize(), "一次未命中解析应当只留下一条缓存");
 
         InetSocketAddress second = resolver.resolve(
                 InetSocketAddress.createUnresolved("localhost", 90)).sync().getNow();
-        assertEquals("命中缓存不应再新增条目", 1, resolverGroup.cacheSize());
-        assertSame("缓存命中应当复用同一个 InetAddress 实例", first.getAddress(), second.getAddress());
-        assertEquals("端口仍然按本次请求拼装", 90, second.getPort());
+        assertEquals(1, resolverGroup.cacheSize(), "命中缓存不应再新增条目");
+        assertSame(first.getAddress(), second.getAddress(), "缓存命中应当复用同一个 InetAddress 实例");
+        assertEquals(90, second.getPort(), "端口仍然按本次请求拼装");
     }
 
     /**
@@ -111,7 +111,7 @@ public class Batch2Test {
 
         assertFalse(resolved.isUnresolved());
         assertEquals(80, resolved.getPort());
-        assertEquals("IP 字面量不应进入缓存", 0, resolverGroup.cacheSize());
+        assertEquals(0, resolverGroup.cacheSize(), "IP 字面量不应进入缓存");
     }
 
     /**
@@ -134,9 +134,9 @@ public class Batch2Test {
         } catch (Exception expected) {
             failed = true;
         }
-        Assume.assumeTrue("当前 DNS 把不存在的域名也解析了，跳过负缓存断言", failed);
+        Assumptions.assumeTrue(failed, "当前 DNS 把不存在的域名也解析了，跳过负缓存断言");
 
-        assertEquals("解析失败也要留下一条负缓存", 1, resolverGroup.cacheSize());
+        assertEquals(1, resolverGroup.cacheSize(), "解析失败也要留下一条负缓存");
 
         boolean failedAgain;
         try {
@@ -145,8 +145,8 @@ public class Batch2Test {
         } catch (Exception expected) {
             failedAgain = true;
         }
-        assertTrue("第二次仍然必须失败", failedAgain);
-        assertEquals("第二次应当直接吃缓存，不再新增条目", 1, resolverGroup.cacheSize());
+        assertTrue(failedAgain, "第二次仍然必须失败");
+        assertEquals(1, resolverGroup.cacheSize(), "第二次应当直接吃缓存，不再新增条目");
     }
 
     // ------------------------------------------------------------------
@@ -173,20 +173,20 @@ public class Batch2Test {
             }
         });
 
-        assertTrue("初始应当是可读的", upstream.config().isAutoRead());
+        assertTrue(upstream.config().isAutoRead(), "初始应当是可读的");
 
         // 只 write 不 flush：数据留在写缓冲里，越过高水位 -> 下游变成不可写
         Channel down = downstream;
         down.pipeline().write(Unpooled.wrappedBuffer(new byte[4096]));
 
-        assertFalse("4KB 超过 2KB 高水位，下游必须变成不可写", down.isWritable());
-        assertFalse("下游不可写时上流读取必须被掐断", upstream.config().isAutoRead());
+        assertFalse(down.isWritable(), "4KB 超过 2KB 高水位，下游必须变成不可写");
+        assertFalse(upstream.config().isAutoRead(), "下游不可写时上流读取必须被掐断");
 
         // flush 排空写缓冲 -> 回到低水位以下 -> 下游恢复可写
         down.flush();
 
-        assertTrue("排空后下游应当恢复可写", down.isWritable());
-        assertTrue("下游恢复可写后上流读取必须打开", upstream.config().isAutoRead());
+        assertTrue(down.isWritable(), "排空后下游应当恢复可写");
+        assertTrue(upstream.config().isAutoRead(), "下游恢复可写后上流读取必须打开");
 
         downstream.finishAndReleaseAll();
         upstream.finishAndReleaseAll();
@@ -200,10 +200,10 @@ public class Batch2Test {
     public void transportFallsBackToNioAndNeverBreaksStartup() {
         // 允许两种结果，但必须自洽：Native 不可用时一定要回退 NIO
         NettyTransport.init(true, false);
-        assertEquals("epoll 是否可用由 native 库决定", io.netty.channel.epoll.Epoll.isAvailable(),
-                NettyTransport.isEpoll());
-        assertEquals("SO_REUSEPORT 只在 epoll 下生效", NettyTransport.isEpoll(),
-                NettyTransport.isSoReusePortEnabled());
+        assertEquals(io.netty.channel.epoll.Epoll.isAvailable(), NettyTransport.isEpoll(),
+        "epoll 是否可用由 native 库决定");
+        assertEquals(NettyTransport.isEpoll(), NettyTransport.isSoReusePortEnabled(),
+        "SO_REUSEPORT 只在 epoll 下生效");
 
         if (NettyTransport.isEpoll()) {
             assertEquals(io.netty.channel.epoll.EpollServerSocketChannel.class,
@@ -218,9 +218,9 @@ public class Batch2Test {
     @Test
     public void useEpollFalseForcesNio() {
         NettyTransport.init(false, true);
-        assertFalse("配置显式关掉 epoll 时必须用 NIO", NettyTransport.isEpoll());
-        assertFalse("NIO 下不能开 SO_REUSEPORT（会让 bind 直接抛 Unknown channel option）",
-                NettyTransport.isSoReusePortEnabled());
+        assertFalse(NettyTransport.isEpoll(), "配置显式关掉 epoll 时必须用 NIO");
+        assertFalse(NettyTransport.isSoReusePortEnabled(),
+                "NIO 下不能开 SO_REUSEPORT（会让 bind 直接抛 Unknown channel option）");
         assertEquals(NioServerSocketChannel.class, NettyTransport.serverChannelClass());
     }
 
@@ -247,10 +247,10 @@ public class Batch2Test {
                 }
             }).sync();
 
-            assertTrue("线程名应带上前缀，便于 jstack 排查: " + threadName.get(),
-                    threadName.get().startsWith("batch2-worker"));
-            assertFalse("event loop 线程不能是 daemon，否则 main 返回后 JVM 会直接退出",
-                    daemon.get());
+            assertTrue(threadName.get().startsWith("batch2-worker"),
+                    "线程名应带上前缀，便于 jstack 排查: " + threadName.get());
+            assertFalse(daemon.get(),
+                    "event loop 线程不能是 daemon，否则 main 返回后 JVM 会直接退出");
         } finally {
             fixed.shutdownGracefully();
         }
@@ -261,7 +261,7 @@ public class Batch2Test {
         MultithreadEventExecutorGroup def =
                 (MultithreadEventExecutorGroup) NettyTransport.newEventLoopGroup(0, "batch2-default");
         try {
-            assertTrue("0 表示交给 Netty 决定（2 * CPU），必须大于 0", def.executorCount() > 0);
+            assertTrue(def.executorCount() > 0, "0 表示交给 Netty 决定（2 * CPU），必须大于 0");
         } finally {
             def.shutdownGracefully();
         }

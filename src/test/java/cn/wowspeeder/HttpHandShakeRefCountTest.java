@@ -14,15 +14,15 @@ import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.ReferenceCountUtil;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * {@link HttpHandShakeRequestHandler} 的引用计数回归测试。
@@ -84,8 +84,8 @@ public class HttpHandShakeRefCountTest {
 
     /** 断言失败路径的通用部分：msg 被释放、没有交给下游。 */
     private static void assertReleasedAndNotForwarded(FullHttpRequest request, DownstreamCapture capture) {
-        assertEquals("解析失败后 msg 必须被释放，否则就是一次 ByteBuf 泄漏", 0, request.refCnt());
-        assertNull("失败路径不应把请求交给下游", capture.received);
+        assertEquals(0, request.refCnt(), "解析失败后 msg 必须被释放，否则就是一次 ByteBuf 泄漏");
+        assertNull(capture.received, "失败路径不应把请求交给下游");
     }
 
     /**
@@ -97,12 +97,12 @@ public class HttpHandShakeRefCountTest {
         DownstreamCapture capture = new DownstreamCapture();
         EmbeddedChannel channel = newChannel(capture);
         FullHttpRequest request = newRequest("/websocket");
-        assertEquals("投喂前引用计数", 1, request.refCnt());
+        assertEquals(1, request.refCnt(), "投喂前引用计数");
 
         Throwable t = writeInboundExpectingFailure(channel, request);
-        assertTrue("期望 UnsupportedOperationException，实际：" + t, t instanceof UnsupportedOperationException);
-        assertTrue("应当是参数不正确的提示，实际：" + t.getMessage(),
-                t.getMessage().contains("url args not right"));
+        assertTrue(t instanceof UnsupportedOperationException, "期望 UnsupportedOperationException，实际：" + t);
+        assertTrue(t.getMessage().contains("url args not right"),
+                "应当是参数不正确的提示，实际：" + t.getMessage());
         assertReleasedAndNotForwarded(request, capture);
 
         channel.close();
@@ -116,10 +116,10 @@ public class HttpHandShakeRefCountTest {
         DownstreamCapture capture = new DownstreamCapture();
         EmbeddedChannel channel = newChannel(capture);
         FullHttpRequest request = newRequest("/websocket?foo=bar");
-        assertEquals("投喂前引用计数", 1, request.refCnt());
+        assertEquals(1, request.refCnt(), "投喂前引用计数");
 
         Throwable t = writeInboundExpectingFailure(channel, request);
-        assertTrue("期望 UnsupportedOperationException，实际：" + t, t instanceof UnsupportedOperationException);
+        assertTrue(t instanceof UnsupportedOperationException, "期望 UnsupportedOperationException，实际：" + t);
         assertReleasedAndNotForwarded(request, capture);
 
         channel.close();
@@ -134,10 +134,10 @@ public class HttpHandShakeRefCountTest {
         DownstreamCapture capture = new DownstreamCapture();
         EmbeddedChannel channel = newChannel(capture);
         FullHttpRequest request = newRequest("/websocket?token=@@not-base64@@");
-        assertEquals("投喂前引用计数", 1, request.refCnt());
+        assertEquals(1, request.refCnt(), "投喂前引用计数");
 
         Throwable t = writeInboundExpectingFailure(channel, request);
-        assertTrue("期望 IllegalArgumentException，实际：" + t, t instanceof IllegalArgumentException);
+        assertTrue(t instanceof IllegalArgumentException, "期望 IllegalArgumentException，实际：" + t);
         assertReleasedAndNotForwarded(request, capture);
 
         channel.close();
@@ -153,12 +153,12 @@ public class HttpHandShakeRefCountTest {
         EmbeddedChannel channel = newChannel(capture);
         String token = Base64Encrypt.getInstance(PASSWORD).getEncString("not-a-host-port");
         FullHttpRequest request = newRequest("/websocket?token=" + token);
-        assertEquals("投喂前引用计数", 1, request.refCnt());
+        assertEquals(1, request.refCnt(), "投喂前引用计数");
 
         Throwable t = writeInboundExpectingFailure(channel, request);
-        assertTrue("期望 UnsupportedOperationException，实际：" + t, t instanceof UnsupportedOperationException);
-        assertTrue("应当是密码不对的提示，实际：" + t.getMessage(),
-                t.getMessage().contains("password is not right"));
+        assertTrue(t instanceof UnsupportedOperationException, "期望 UnsupportedOperationException，实际：" + t);
+        assertTrue(t.getMessage().contains("password is not right"),
+                "应当是密码不对的提示，实际：" + t.getMessage());
         assertReleasedAndNotForwarded(request, capture);
 
         channel.close();
@@ -175,23 +175,22 @@ public class HttpHandShakeRefCountTest {
         EmbeddedChannel channel = newChannel(capture);
         String token = Base64Encrypt.getInstance(PASSWORD).getEncString("127.0.0.1:443");
         FullHttpRequest request = newRequest("/websocket?token=" + token);
-        assertEquals("投喂前引用计数", 1, request.refCnt());
+        assertEquals(1, request.refCnt(), "投喂前引用计数");
 
         channel.writeInbound(request);
 
         channel.checkException();
-        assertSame("正常路径必须把同一个请求对象交给下游", request, capture.received);
-        assertEquals("交给下游时引用计数必须还是 1（不能多释放）", 1, request.refCnt());
-        assertEquals("uri 里的 query 部分应当被去掉", "/websocket", ((HttpRequest) capture.received).uri());
-        assertEquals("目标地址应当写入 channel 属性",
-                InetSocketAddress.createUnresolved("127.0.0.1", 443),
-                channel.attr(SWCommon.REMOTE_DES).get());
-        assertNull("解析完成后 handler 应当把自己从 pipeline 上移除",
-                channel.pipeline().get(HttpHandShakeRequestHandler.class));
+        assertSame(request, capture.received, "正常路径必须把同一个请求对象交给下游");
+        assertEquals(1, request.refCnt(), "交给下游时引用计数必须还是 1（不能多释放）");
+        assertEquals("/websocket", ((HttpRequest) capture.received).uri(), "uri 里的 query 部分应当被去掉");
+        assertEquals(InetSocketAddress.createUnresolved("127.0.0.1", 443), channel.attr(SWCommon.REMOTE_DES).get(),
+                "目标地址应当写入 channel 属性");
+        assertNull(channel.pipeline().get(HttpHandShakeRequestHandler.class),
+                "解析完成后 handler 应当把自己从 pipeline 上移除");
 
         // 交给下游后由下游负责释放
         ReferenceCountUtil.release(capture.received);
-        assertEquals("下游释放后引用计数归零", 0, request.refCnt());
+        assertEquals(0, request.refCnt(), "下游释放后引用计数归零");
 
         channel.close();
     }
