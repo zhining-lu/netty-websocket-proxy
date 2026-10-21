@@ -222,7 +222,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                             }
                                         });
                             }else{
-//                                logger.error("channel id {}, {}<->{} connect {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), ssServer.toString(), f.isSuccess(), f.cause());
+                                logger.error("channel id {}, {}<->{} connect {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), ssServer.toString(), f.isSuccess(), f.cause());
                                 ProxyStats.tunnelFailed();
                                 proxyChannelClose();
                             }
@@ -276,7 +276,7 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-//        super.exceptionCaught(ctx, cause);
+        logger.error("socks channel exception", cause);
         proxyChannelClose();
     }
 
