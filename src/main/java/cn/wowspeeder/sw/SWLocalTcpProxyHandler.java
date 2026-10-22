@@ -70,7 +70,8 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
             Base64Encrypt base64 = Base64Encrypt.getInstance(password);
 
             String url = "ws://"+ssServer.getHostString()+":"+ssServer.getPort()+"/websocket?token="+ base64.getEncString(remoteAddr.dstAddr()+":"+remoteAddr.dstPort());
-            logger.debug("connect {} -> {}:{}", ssServer, remoteAddr.dstAddr(), remoteAddr.dstPort());
+            // 打印完整 url（含 token）。token 里已加密了目标地址，排查时能直接复用整条 url 重放请求。
+            logger.info("channel id {}, connect url: {}", clientChannel.id().toString(), url);
             URI uri = new URI(url);
 
             final SslContext sslCtx = getSslContext(uri);
