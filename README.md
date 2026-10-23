@@ -117,5 +117,5 @@ sysctl -w net.core.wmem_max=16777216
 * [ ] performance optimization
 * [ ] android client
 ## Data flow
-![image](https://img-blog.csdnimg.cn/2020051017110683.png)
+![DataFlow.jpeg](assets/DataFlow.jpeg)
    Note: CDN is optional
