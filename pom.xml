@@ -31,10 +31,8 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>2.3.2</version>
+				<version>3.11.0</version>
 				<configuration>
-					<source>1.8</source>
-					<target>1.8</target>
 					<encoding>UTF-8</encoding>
 				</configuration>
 			</plugin>
@@ -236,4 +234,57 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<!--
+		编译目标必须锁在 Java 8 的 API 上，光锁字节码版本不够。
+
+		坑：只配 source/target 时，JDK 9+ 的 javac 只是把产物标成 52 字节码，方法签名仍按
+		新 JDK 的符号表解析。Java 9 起 ByteBuffer.position/limit/clear/flip 的返回值从
+		Buffer 改成协变的 ByteBuffer，编译期就把调用绑到了新签名上，产物拿到 JDK 8 运行即
+		NoSuchMethodError: java.nio.ByteBuffer.position(I)Ljava/nio/ByteBuffer。
+		编译期不报错，运行期才炸，是本项目踩过的最贵的坑。
+
+		解法：release 让 javac 对着 Java 8 的 ct.sym 做符号解析，这类越界 API 在编译期
+		直接失败。但该选项是 JDK 9 才引入的，JDK 8 的 javac 不认识（invalid flag），
+		所以按 JDK 版本二选一：9+ 走 release（compile-jdk9plus），JDK 8 只能退回
+		source/target（compile-jdk8）。后者在 JDK 8 上是安全的，因为编译所用的 JDK 本身
+		就是 8，不存在「按更高版本解析签名」的机会。
+	-->
+	<profiles>
+		<profile>
+			<id>compile-jdk8</id>
+			<activation>
+				<jdk>1.8</jdk>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-compiler-plugin</artifactId>
+						<configuration>
+							<source>1.8</source>
+							<target>1.8</target>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<profile>
+			<id>compile-jdk9plus</id>
+			<activation>
+				<jdk>[9,)</jdk>
+			</activation>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-compiler-plugin</artifactId>
+						<configuration>
+							<release>8</release>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
