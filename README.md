@@ -33,15 +33,84 @@ Server side (`-s`) and client side (`-c`) share the same config format:
 |---|---|
 | `server` | 服务端(`-s`)是监听地址，客户端(`-c`)是要连接的远端地址 |
 | `port_password` | key 是端口，value 是该端口的密码；两端必须一致 |
+| `payload_cipher` | 可选，缺省 `aes-256-gcm`。隧道载荷加密开关，只有 `none` 表示关闭，其余值一律按 `aes-256-gcm` 处理。**两端必须一致**，详见下一节 |
 | `local_address` / `local_port` | 仅客户端使用，本地 SOCKS5 监听地址与起始端口 |
 | `boss_threads` | 可选，缺省 `1`。只监听一个端口时多开无意义 |
 | `worker_threads` | 可选，缺省 `0` = Netty 默认（`2 × CPU`）。代理场景建议按并发连接数显式指定 |
 | `use_epoll` | 可选，缺省 `true`。Linux 上优先用 epoll；native 库不可用时**自动回退 NIO**，不会启动失败 |
 | `so_reuseport` | 可选，缺省 `false`。仅在 epoll 生效，多进程绑同一端口做负载均衡时打开 |
-| `receive_buffer` / `send_buffer` | 可选，缺省**不设置**。即 `SO_RCVBUF` / `SO_SNDBUF`，单位字节。**非必要不要动**，理由见下一节 |
+| `receive_buffer` / `send_buffer` | 可选，缺省**不设置**。即 `SO_RCVBUF` / `SO_SNDBUF`，单位字节。**非必要不要动**，理由见下文 |
+| `stats_interval_seconds` | 可选，缺省 `60`；`≤0` 表示关闭周期性统计。统计跑在 worker event loop 上（不额外起线程），内容为活跃连接数、隧道/目标建连成功率、DNS 缓存命中率 |
+
+> 统计日志每 `stats_interval_seconds` 秒往 `logs/sw-proxy.log` 打一行，形如：
+> ```
+> stats: active[socks=3, tunnel=3, target=2] tunnelConnect[attempt=12, success=12, fail=0, rate=100.0%] targetConnect[attempt=9, success=8, fail=1, rate=88.9%] dns[hit=7, miss=2, ipLiteral=1, rejected=0, hitRate=77.8%]
+> ```
+> 成功率按 `成功 / (成功 + 失败)` 算，分母为 0 时显示 `n/a`。活跃连接数是当前值，其余是进程级累计值。
 
 > 要用上 epoll，需要把 `netty-transport-native-epoll` 的 `linux-x86_64` classifier 包放进 classpath，
 > 否则 `Epoll.isAvailable()` 返回 false，程序照常以 NIO 启动（启动日志里会打印 `transport=nio`）。
+
+### 关于隧道加密 `payload_cipher`
+
+**缺省开启。** 加密对象是隧道里每个 WebSocket Binary 帧的**载荷**（你真正在代理的应用数据）；
+握手 URL 里的 `token` 是另一套独立机制（加密目标地址），两者互不影响。
+
+密钥链路：
+
+```
+端口密码 ──PBKDF2-HMAC-SHA256, 12 万次, 启动预热──▶ 主密钥
+主密钥 + 每连接 8B 随机 salt + 方向标签 ──HKDF-SHA256──▶ c2s / s2c 两把独立的 AES-256 密钥
+```
+
+salt 以明文随握手 URL 传（`&salt=...`，它不是秘密），作用只是让每条连接、每个方向的密钥都不同。
+**握手不增加往返**：salt 搭在已有的 WS 握手上，PBKDF2 已在启动阶段热身过。
+
+记录格式（也就是 WS Binary 帧的 payload；真正落到 socket 上还要加 2~14 字节 WS 帧头，
+那是本来就要付的开销，与加密无关）：
+
+```
+seq(4B) | ciphertext(n B) | tag(16B)          整条长度恒为 n + 20
+```
+
+* `n` 就是明文长度 —— GCM 内部是 CTR 流，密文与明文等长，这也是能就地改写的先决条件。
+* `seq` 严格 +1，既当 GCM IV 的低 32 位（高 8 字节是 salt），又当 AAD。重放、乱序、把上行密文
+  反射回下行都会在认证处失败并断连 —— 不会有一字节未认证的明文漏给下游。
+* 明文被**就地**改写成密文，不额外拷贝、也不扩容，大包没有额外内存开销。
+* 代价是每帧固定多 20 字节（seq + tag）。
+* **一条记录必须完整装在一个 WS 帧里**：`WebSocketByteBufCodec` 直接把 `msg.content()` 交给
+  解密，不重组分片；记录也不接受多段缓冲（拿 seal 产出的 3 段 composite 去 `open` 会直接报
+  `record buffer must be contiguous, components=3`）。单帧上限是对端的 `maxFramePayloadLength`
+  （客户端 320KB），而中继按 TCP 读缓冲切帧，实际远低于这个值。
+
+**两端必须一致。** 协议里没有协商（协商要多一次 RTT）：一端开、一端关时，TCP 与 WS 握手都会
+成功，但隧道建立后的第一帧就认证失败、连接被断开。默认日志级别是 `info`，而这条失败信息是
+`debug` —— **日志里什么都看不到**，只表现为「连上就断」。排查办法：
+
+1. 比对两端启动日志，各有一行 `payload cipher: aes-256-gcm`；
+2. 客户端侧看隧道 URL 有没有 `&salt=` 后缀（有就是开了）；
+3. 把 `cn.wowspeeder` 调到 `debug`，才能看到 `payload cipher failed, closing tunnel: ...`。
+
+另外 `payload_cipher` 开启时握手 URL **必须**带 salt，缺失会在服务端报
+`url args not right please check: salt is required when payload cipher is on`（这条是 error 级，能看到）。
+
+**升级注意：** 老版本没有这层加密，而新版本缺省是开的。只升级一端必然连不上 —— 要么两端在同一
+时间窗口一起升，要么先把已升级那端显式设成 `none`，两边都升完再统一切回 `aes-256-gcm`。
+
+性能参考（单条记录，含每帧一次 `Cipher.init`）：1.4KB 约 3 µs、32KB 约 16 µs（JDK 21）/ 32 µs
+（JDK 8），即单核 0.5~2 GB/s，千兆链路远不是瓶颈。真正需要留意的是那 20 字节：1448B 帧只占
+1.4%，但 256B 以下的小包会占到 8%~30%，高 pps 场景下是显性成本。
+
+配置示例：
+
+```json
+{
+  "server": "0.0.0.0",
+  "port_password": { "443": "889900" },
+  "payload_cipher": "aes-256-gcm",
+  "stats_interval_seconds": 60
+}
+```
 
 ### 关于 `SO_RCVBUF` / `SO_SNDBUF`
 
