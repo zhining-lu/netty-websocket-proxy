@@ -1,6 +1,8 @@
 package cn.wowspeeder.sw;
 
 import cn.wowspeeder.encryption.Base64Encrypt;
+import cn.wowspeeder.encryption.PayloadCipher;
+import cn.wowspeeder.websocket.PayloadCipherCodec;
 import cn.wowspeeder.websocket.WebSocketByteBufCodec;
 import cn.wowspeeder.websocket.WebSocketClientHandler;
 import io.netty.bootstrap.Bootstrap;
@@ -26,6 +28,7 @@ import javax.net.ssl.SSLException;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -39,10 +42,17 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
     private Bootstrap proxyClient;
     private String password;
     private List<ByteBuf> clientBuffs;
+    /** 是否对隧道载荷加密（配置项 payload_cipher）。 */
+    private final boolean payloadCipherEnabled;
 
 
     public SWLocalTcpProxyHandler(String server, Integer port, String password) {
+        this(server, port, password, true);
+    }
+
+    public SWLocalTcpProxyHandler(String server, Integer port, String password, boolean payloadCipherEnabled) {
         this.password = password;
+        this.payloadCipherEnabled = payloadCipherEnabled;
         // 刻意用 createUnresolved：new InetSocketAddress(server, port) 会在构造时就同步查 DNS，
         // 而本构造器是在 SOCKS 通道 initChannel 里被调用的（跑在 event loop 上）。
         // 解析交给 AsyncDnsAddressResolverGroup 在独立线程池里做，见下面 proxyClient 的 resolver()。
@@ -65,11 +75,17 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
         logger.debug("channel id {},pc is null {},{}", clientChannel.id().toString(), (remoteChannel == null), msg.readableBytes());
         if (remoteChannel == null && proxyClient == null) {
             ProxyStats.tunnelAttempt();
-            // url =  ws://127.0.0.1:8080/websocket?token=<base64url(IV||AES-256-GCM(host:port)||tag)>
+            // url =  ws://127.0.0.1:8080/websocket?token=<base64url(IV||AES-256-GCM(host:port)||tag)>[&salt=<base64url(8B)>]
             // token 用的是 URL 安全 Base64 且不含换行，可以直接拼进 query。
             Base64Encrypt base64 = Base64Encrypt.getInstance(password);
 
+            // 载荷加密的每连接随机盐：明文放在 URL 里没有问题（盐不是秘密，密钥靠端口密码派生），
+            // 但它让两端 HKDF 出每连接独立的密钥，token 被录制重放也不会密钥流复用。
+            byte[] connSalt = payloadCipherEnabled ? PayloadCipher.newSalt() : null;
             String url = "ws://"+ssServer.getHostString()+":"+ssServer.getPort()+"/websocket?token="+ base64.getEncString(remoteAddr.dstAddr()+":"+remoteAddr.dstPort());
+            if (connSalt != null) {
+                url += "&salt=" + Base64.getUrlEncoder().withoutPadding().encodeToString(connSalt);
+            }
             // 打印完整 url（含 token）。token 里已加密了目标地址，排查时能直接复用整条 url 重放请求。
             logger.info("channel id {}, connect url: {}", clientChannel.id().toString(), url);
             URI uri = new URI(url);
@@ -127,6 +143,12 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                             .addLast(new HttpObjectAggregator(65536 * 5))
                                             .addLast(handler)
                                             .addLast(new WebSocketByteBufCodec());
+
+                                    // 载荷加密：必须夹在 WebSocketByteBufCodec 与 relay 之间 ——
+                                    // 出站 relay → 这里密封 → WebSocketByteBufCodec 封帧，入站反向。
+                                    if (payloadCipherEnabled) {
+                                        pipeline.addLast(PayloadCipherCodec.forClient(password, connSalt));
+                                    }
 
 //                                    pipeline.addLast("ssCipherCodec", new SSCipherCodec());
                                     pipeline.addLast("relay", new SimpleChannelInboundHandler<ByteBuf>() {

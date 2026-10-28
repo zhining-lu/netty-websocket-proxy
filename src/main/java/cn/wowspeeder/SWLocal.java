@@ -43,6 +43,7 @@ public class SWLocal {
         logger.info("load config !");
         // 提前跑一次 PBKDF2 派生 token 密钥，避免第一条连接额外多出约 150ms 握手延迟
         config.warmUpTokenKeys();
+        logger.info("payload cipher: {}", config.getPayloadCipher());
 
         NettyTransport.init(config.isUseEpoll(), config.isSoReuseport());
         // socket 缓冲区默认不设，交给内核按实测 BDP 自动调优；只有配置显式给了值才设。
@@ -56,11 +57,13 @@ public class SWLocal {
             startSingle(config.getLocalAddress(), config.getLocalPort(),
                     config.getServer(),
                     portPassword.getKey(),
-                    portPassword.getValue());
+                    portPassword.getValue(),
+                    config.isPayloadCipherEnabled());
         }
     }
 
-    private void startSingle(String socks5Server, Integer socks5Port, String server, Integer port, String password) throws Exception {
+    private void startSingle(String socks5Server, Integer socks5Port, String server, Integer port, String password,
+                             boolean payloadCipherEnabled) throws Exception {
         ServerBootstrap tcpBootstrap = new ServerBootstrap();
 
         //local socks5  server ,tcp
@@ -92,7 +95,7 @@ public class SWLocal {
 //                                .addLast(new LoggingHandler(LogLevel.INFO))
                                 .addLast(new SocksPortUnificationServerHandler())
                                 .addLast(SocksServerHandler.INSTANCE)
-                                .addLast(new SWLocalTcpProxyHandler(server, port, password));
+                                .addLast(new SWLocalTcpProxyHandler(server, port, password, payloadCipherEnabled));
                     }
                 });
 

@@ -3,7 +3,6 @@ package cn.wowspeeder.encryption;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.Mac;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -39,7 +38,8 @@ import java.util.concurrent.ConcurrentMap;
  * </ol>
  *
  * <h2>现在的实现</h2>
- * <b>AES-256-GCM</b>（JDK 自带 SunJCE，无额外依赖），密钥用 <b>PBKDF2-HMAC-SHA256</b> 派生：
+ * <b>AES-256-GCM</b>（JDK 自带 SunJCE，无额外依赖），密钥由 <b>PBKDF2-HMAC-SHA256</b> 派生
+ * （派生逻辑在 {@link PskDeriver}，与隧道载荷加密共用同一把主密钥）：
  * <ul>
  *   <li>密钥：{@code PBKDF2(password, SALT, 120000 次, 32 字节)}；不加随机盐是为了让同一个端口密码
  *       在客户端与服务端派生出同一把密钥（这是单向约定，不是存储密码）；高迭代次数用来抬高
@@ -54,24 +54,11 @@ import java.util.concurrent.ConcurrentMap;
  */
 public class Base64Encrypt {
 
-	/** AES-GCM 标准密钥长度 32 字节。 */
-	private static final int KEY_BITS = 256;
-
 	/** GCM 推荐 12 字节 IV；JDK 的 SunJCE 不接受其他长度。 */
 	private static final int IV_BYTES = 12;
 
 	/** GCM 认证标签长度（位）。 */
 	private static final int TAG_BITS = 128;
-
-	/**
-	 * PBKDF2 迭代次数。端口密码通常很短，这里按 OWASP 2023 对 PBKDF2-HMAC-SHA256 的建议
-	 * 取 120000；每条连接只是解一次 GCM，没有 PBKDF2 开销（派生结果被缓存）。
-	 */
-	private static final int PBKDF2_ITERATIONS = 120000;
-
-	/** 固定盐：同一密码在两端派生出同一把密钥。它公开可见，安全性由密码与迭代次数提供。 */
-	private static final byte[] KDF_SALT =
-			"netty-websocket-proxy/token-encryption/v2".getBytes(StandardCharsets.UTF_8);
 
 	private static final String CIPHER = "AES/GCM/NoPadding";
 
@@ -104,42 +91,7 @@ public class Base64Encrypt {
 		if (password == null) {
 			throw new IllegalArgumentException("password must not be null");
 		}
-		this.key = deriveKey(password);
-	}
-
-	/**
-	 * PBKDF2-HMAC-SHA256 派生固定 32 字节密钥。
-	 * <p>
-	 * 这里手写 PBKDF2 而不是用 {@code SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")}，
-	 * 是因为后者在较老的 JDK 上并非所有厂商都提供；用 Mac 循环实现的成本很低，
-	 * 且迭代次数与盐都是显式写死的，不依赖 Provider 的默认行为。
-	 */
-	private static SecretKeySpec deriveKey(String password) throws GeneralSecurityException {
-		Mac mac;
-		try {
-			mac = Mac.getInstance("HmacSHA256");
-		} catch (NoSuchAlgorithmException e) {
-			throw new IllegalStateException("HmacSHA256 not available", e);
-		}
-		mac.init(new SecretKeySpec(password.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-
-		// PBKDF2 的 dkLen 正好等于 HMAC-SHA256 输出长度，只需要一个 block（i = 1）
-		byte[] block = new byte[KDF_SALT.length + 4];
-		System.arraycopy(KDF_SALT, 0, block, 0, KDF_SALT.length);
-		block[KDF_SALT.length] = 0;
-		block[KDF_SALT.length + 1] = 0;
-		block[KDF_SALT.length + 2] = 0;
-		block[KDF_SALT.length + 3] = 1;
-
-		byte[] u = mac.doFinal(block);
-		byte[] derived = u.clone();
-		for (int i = 1; i < PBKDF2_ITERATIONS; i++) {
-			u = mac.doFinal(u);
-			for (int j = 0; j < derived.length; j++) {
-				derived[j] ^= u[j];
-			}
-		}
-		return new SecretKeySpec(derived, "AES");
+		this.key = PskDeriver.getInstance(password).masterKey();
 	}
 
 	/**

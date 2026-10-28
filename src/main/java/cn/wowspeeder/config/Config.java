@@ -12,6 +12,16 @@ public class Config {
 	@SerializedName("server")
 	private String server;
 
+	/**
+	 * 隧道载荷加密，缺省 {@code aes-256-gcm}（每帧 AES-256-GCM 就地加解密，密钥由端口密码 + 每连接
+	 * 随机 salt 派生）；{@code none} 关闭，用于灰度/回滚。
+	 * <p>
+	 * <b>两端必须一致</b>：协议里没有协商过程（握手 RTT 不能多），不一致时隧道建立后的第一帧
+	 * 就会认证失败断连，日志表现为 payload cipher failed。
+	 */
+	@SerializedName("payload_cipher")
+	private String payloadCipher;
+
 	@SerializedName("port_password")
 	private Map<Integer,String> portPassword;
 
@@ -77,6 +87,19 @@ public class Config {
 
 	public void setPortPassword(Map<Integer,String> portPassword) {
 		this.portPassword = portPassword;
+	}
+
+	public String getPayloadCipher() {
+		return payloadCipher == null ? "aes-256-gcm" : payloadCipher;
+	}
+
+	public void setPayloadCipher(String payloadCipher) {
+		this.payloadCipher = payloadCipher;
+	}
+
+	/** 隧道载荷加密是否开启；仅识别 {@code none} 为关闭，其余值（含缺省）都按 aes-256-gcm 处理。 */
+	public boolean isPayloadCipherEnabled() {
+		return !"none".equalsIgnoreCase(getPayloadCipher());
 	}
 
 	public String getLocalAddress() {

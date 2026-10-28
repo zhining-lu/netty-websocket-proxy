@@ -46,6 +46,7 @@ public class SWServer {
         logger.info("load config !");
         // 提前跑一次 PBKDF2 派生 token 密钥，避免首个连接额外多出约 150ms 的 token 校验延迟
         config.warmUpTokenKeys();
+        logger.info("payload cipher: {}", config.getPayloadCipher());
 
         NettyTransport.init(config.isUseEpoll(), config.isSoReuseport());
         // socket 缓冲区默认不设，交给内核按实测 BDP 自动调优；只有配置显式给了值才设。
@@ -56,11 +57,12 @@ public class SWServer {
         ProxyStats.startReporter(workerGroup, config.getStatsIntervalSeconds());
 
         for (Map.Entry<Integer, String> portPassword : config.getPortPassword().entrySet()) {
-            startSingle(config.getServer(), portPassword.getKey(), portPassword.getValue());
+            startSingle(config.getServer(), portPassword.getKey(), portPassword.getValue(),
+                    config.isPayloadCipherEnabled());
         }
     }
 
-    private void startSingle(String server, Integer port, String password) throws Exception {
+    private void startSingle(String server, Integer port, String password, boolean payloadCipherEnabled) throws Exception {
         // Configure SSL.
         final SslContext sslCtx;
         if (SSL) {
@@ -98,7 +100,7 @@ public class SWServer {
                                 });
 
                         //ss-websocket
-                        ctx.pipeline().addLast(new WebSocketServerInitializer(sslCtx))
+                        ctx.pipeline().addLast(new WebSocketServerInitializer(sslCtx, payloadCipherEnabled))
                                 //ss-proxy
                                 .addLast("ssTcpProxy", new SWServerTcpProxyHandler());
 

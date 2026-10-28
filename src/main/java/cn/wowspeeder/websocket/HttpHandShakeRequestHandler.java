@@ -1,6 +1,7 @@
 package cn.wowspeeder.websocket;
 
 import cn.wowspeeder.encryption.Base64Encrypt;
+import cn.wowspeeder.encryption.PayloadCipher;
 import cn.wowspeeder.sw.SWCommon;
 import cn.wowspeeder.sw.SWServerTcpProxyHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -12,6 +13,7 @@ import io.netty.util.internal.logging.InternalLoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
+import java.util.Base64;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -60,7 +62,6 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
      * 解析失败时直接抛异常，由调用方（{@link #channelRead}）负责释放 msg。
      */
     private void resolveTarget(ChannelHandlerContext ctx, HttpRequest request, String uri) throws Exception {
-        String targetAddr = "";
         String[] s = uri.split("\\?");
         switch (s.length) {
             case 1:
@@ -68,15 +69,26 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                 throw new UnsupportedOperationException("url args not right please check ");
             case 2:
                 //remove the part after ? and reset uri
-                // uri = /websocket?target=123.456.44.7:8080
+                // uri = /websocket?token=<base64url>&salt=<base64url(8B)>
                 request.setUri(s[0]);
-                String token = s[1];
 
-                Pattern tp = Pattern.compile("^token=(.*)");
-                Matcher tm = tp.matcher(token);
-                if (tm.matches()) {
-                    targetAddr = tm.group(1);
-                } else {
+                // query 可能带多个参数（token 必有；开启载荷加密时还有 salt），逐个解析
+                String token = null;
+                String saltB64 = null;
+                for (String kv : s[1].split("&")) {
+                    int eq = kv.indexOf('=');
+                    if (eq <= 0) {
+                        continue;
+                    }
+                    String name = kv.substring(0, eq);
+                    String value = kv.substring(eq + 1);
+                    if ("token".equals(name)) {
+                        token = value;
+                    } else if ("salt".equals(name)) {
+                        saltB64 = value;
+                    }
+                }
+                if (token == null) {
                     logger.error("url args not right please check");
                     throw new UnsupportedOperationException("url args not right please check ");
                 }
@@ -86,7 +98,7 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
 
                 String targetHostAndPort;
                 try {
-                    targetHostAndPort = base64.getDesString(targetAddr);
+                    targetHostAndPort = base64.getDesString(token);
                 } catch (GeneralSecurityException e) {
                     // AES-GCM 认证失败：密码不对，或者 token 被截断/篡改。
                     // 故意不把具体原因回给客户端，避免成为密码猜测的提示。
@@ -113,6 +125,15 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                     if (tcpProxyHandler != null) {
                         tcpProxyHandler.connectTargetOnHandshake(ctx.channel());
                     }
+
+                    // 载荷加密：管线里挂了 PayloadCipherCodec 就说明本端口开了加密，
+                    // 必须在握手阶段拿到 salt 并派生密钥（此后任何一帧都验签，fail-closed）。
+                    // 不在管线里（payload_cipher=none）则忽略 salt，保持旧行为。
+                    PayloadCipherCodec cipherCodec = ctx.pipeline().get(PayloadCipherCodec.class);
+                    if (cipherCodec != null) {
+                        byte[] salt = decodeSalt(saltB64);
+                        cipherCodec.initServerKeys(salt);
+                    }
                 } else {
                     logger.error("may be password is not right");
                     throw new UnsupportedOperationException("may be password is not right");
@@ -123,5 +144,28 @@ public class HttpHandShakeRequestHandler extends ChannelInboundHandlerAdapter {
                 logger.warn("More than one ? in url: {}", uri);
                 throw new UnsupportedOperationException("url args not right please check ");
         }
+    }
+
+    /**
+     * 解码 salt 参数：URL 安全 Base64、无填充、固定 8 字节（见 {@link PayloadCipher#SALT_BYTES}）。
+     * 不合法一律按「url args not right」断连，不区分具体原因（不给探测者任何额外信息）。
+     */
+    private static byte[] decodeSalt(String saltB64) throws UnsupportedOperationException {
+        if (saltB64 == null || saltB64.isEmpty()) {
+            logger.error("url args not right please check: salt is required when payload cipher is on");
+            throw new UnsupportedOperationException("url args not right please check ");
+        }
+        byte[] salt;
+        try {
+            salt = Base64.getUrlDecoder().decode(saltB64);
+        } catch (IllegalArgumentException e) {
+            logger.error("url args not right please check: salt is not base64url");
+            throw new UnsupportedOperationException("url args not right please check ");
+        }
+        if (salt.length != PayloadCipher.SALT_BYTES) {
+            logger.error("url args not right please check: bad salt length {}", salt.length);
+            throw new UnsupportedOperationException("url args not right please check ");
+        }
+        return salt;
     }
 }
