@@ -245,8 +245,12 @@ public class SWLocalTcpProxyHandler extends SimpleChannelInboundHandler<ByteBuf>
                                             }
                                         });
                             }else{
-                                logger.error("channel id {}, {}<->{} connect {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), ssServer.toString(), f.isSuccess(), f.cause());
                                 ProxyStats.tunnelFailed();
+                                if (clientChannel == null) {
+                                    logger.error("client closed, {} handshake {},cause {}", ssServer.toString(), f.isSuccess(), f.cause());
+                                } else {
+                                    logger.error("channel id {}, {}<->{} handshake {},cause {}", clientChannel.id().toString(), clientChannel.remoteAddress().toString(), ssServer.toString(), f.isSuccess(), f.cause());
+                                }
                                 proxyChannelClose();
                             }
 
