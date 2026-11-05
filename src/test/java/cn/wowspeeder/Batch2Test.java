@@ -202,17 +202,28 @@ public class Batch2Test {
         NettyTransport.init(true, false);
         assertEquals(io.netty.channel.epoll.Epoll.isAvailable(), NettyTransport.isEpoll(),
         "epoll 是否可用由 native 库决定");
-        assertEquals(NettyTransport.isEpoll(), NettyTransport.isSoReusePortEnabled(),
-        "SO_REUSEPORT 只在 epoll 下生效");
+        // 这里传的 wantReusePort 是 false，所以无论 epoll 可不可用，SO_REUSEPORT 都必须是关的。
+        // （不能断言 isEpoll() == isSoReusePortEnabled()：Linux 上 epoll=true 而 reusePort=false，
+        //  只有 Windows 那种 epoll 不可用的情况才会恰好相等，那是巧合不是不变式。）
+        assertFalse(NettyTransport.isSoReusePortEnabled(),
+                "没要求 SO_REUSEPORT 时必须关闭，与 epoll 是否可用无关");
 
         if (NettyTransport.isEpoll()) {
             assertEquals(io.netty.channel.epoll.EpollServerSocketChannel.class,
                     NettyTransport.serverChannelClass());
+            assertEquals(io.netty.channel.epoll.EpollSocketChannel.class,
+                    NettyTransport.clientChannelClass());
         } else {
             assertEquals(NioServerSocketChannel.class, NettyTransport.serverChannelClass());
             assertEquals(io.netty.channel.socket.nio.NioSocketChannel.class,
                     NettyTransport.clientChannelClass());
         }
+
+        // 真的要求 SO_REUSEPORT 时才看后端：只有 epoll 认这个选项，
+        // NIO 上设置会直接抛 Unknown channel option
+        NettyTransport.init(true, true);
+        assertEquals(NettyTransport.isEpoll(), NettyTransport.isSoReusePortEnabled(),
+                "SO_REUSEPORT 只在 epoll 下生效");
     }
 
     @Test
