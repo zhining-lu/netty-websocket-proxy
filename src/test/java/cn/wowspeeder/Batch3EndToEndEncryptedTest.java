@@ -16,12 +16,11 @@ import io.netty.channel.Channel;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.MultiThreadIoEventLoopGroup;
-import io.netty.channel.nio.NioIoHandler;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
-import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import javax.crypto.spec.SecretKeySpec;
@@ -57,14 +56,29 @@ public class Batch3EndToEndEncryptedTest {
     private static final byte[] SALT = "saltsalt".getBytes(StandardCharsets.US_ASCII);
     private static final int TIMEOUT_SECONDS = 10;
 
-    // Netty 4.2 起 NioEventLoopGroup 已 deprecated，改用 MultiThreadIoEventLoopGroup + NioIoHandler
-    private static final EventLoopGroup BOSS = new MultiThreadIoEventLoopGroup(1, NioIoHandler.newFactory());
-    private static final EventLoopGroup WORKER = new MultiThreadIoEventLoopGroup(2, NioIoHandler.newFactory());
+    /**
+     * event loop 必须与 {@link NettyTransport#serverChannelClass()} 同源，不能硬编码 NIO：
+     * native epoll 可用时（Linux CI）channel class 是 {@code EpollServerSocketChannel}，
+     * 而 {@code NioIoHandler} 不认它，{@code register} 会抛
+     * {@code IllegalStateException: incompatible event loop type}。
+     */
+    private EventLoopGroup boss;
+    private EventLoopGroup worker;
 
-    @AfterAll
-    public static void tearDownClass() {
-        BOSS.shutdownGracefully();
-        WORKER.shutdownGracefully();
+    @BeforeEach
+    public void setUpGroups() {
+        // 显式固定一次传输决策：不依赖其它用例（Batch2Test 会来回切 epoll 开关）留下的静态状态，
+        // Linux 上就是 epoll，Windows 上自动回退 NIO
+        NettyTransport.init(true, false);
+        boss = NettyTransport.newEventLoopGroup(1, "batch3-e2e-boss");
+        worker = NettyTransport.newEventLoopGroup(2, "batch3-e2e-worker");
+    }
+
+    @AfterEach
+    public void tearDownGroups() {
+        // quiet period 设 0：默认 2s 的静默期会白白拖慢测试
+        boss.shutdownGracefully(0, 5, TimeUnit.SECONDS);
+        worker.shutdownGracefully(0, 5, TimeUnit.SECONDS);
     }
 
     @Test
@@ -110,7 +124,7 @@ public class Batch3EndToEndEncryptedTest {
 
         // 服务端：复刻 SWServer.startSingle 开启载荷加密后挂的那条 pipeline
         ServerBootstrap serverBootstrap = new ServerBootstrap();
-        serverBootstrap.group(BOSS, WORKER)
+        serverBootstrap.group(boss, worker)
                 .channel(NettyTransport.serverChannelClass())
                 .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, SWCommon.WRITE_BUFFER_WATER_MARK)
                 .childHandler(new ChannelInitializer<Channel>() {
