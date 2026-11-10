@@ -164,17 +164,4 @@ public class Base64Encrypt {
 		}
 		return cipher;
 	}
-
-	public static byte[] hex2byte(String strhex) {
-		if (strhex == null) {
-			return null;
-		}
-		int l = strhex.length();
-		byte[] b = new byte[l / 2];
-		for (int i = 0; i != l / 2; i++) {
-			b[i] = (byte) Integer.parseInt(strhex.substring(i * 2, i * 2 + 2), 16);
-		}
-
-		return b;
-	}
 }

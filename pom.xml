@@ -22,8 +22,6 @@
 		<slf4j.version>1.7.36</slf4j.version>
 		<!-- log4j2 的 AsyncLogger / AsyncRoot 需要 disruptor，2.20 起要求 3.4.x -->
 		<disruptor.version>3.4.4</disruptor.version>
-		<!-- bcprov-jdk15on 停在 1.70，1.71 起改名 bcprov-jdk18on（JDK 1.8+） -->
-		<bcprov.version>1.86</bcprov.version>
 	</properties>
 
 	<build>
@@ -154,32 +152,11 @@
 			<scope>runtime</scope>
 		</dependency>
 		<!--
-			Bouncy Castle：encryption 包里的 7 种 shadowsocks 加密算法全靠它（JDK 没有 Camellia /
-			SEED / Blowfish 的标准实现，且 BC 的轻量 API 可流式 processBytes，适合代理热路径）。
-			注意 artifact 改名：bcprov-jdk15on 停在 1.70 不再更新，1.71 起叫 bcprov-jdk18on
-			（"jdk18on" = JDK 1.8 以上，不是 Java 18）。1.86 的 base class 仍是 major 52，
-			META-INF/versions 里是多 JDK 的 MR-Jar，Java 8 会忽略，不影响 source/target=1.8。
-			包名 org.bouncycastle.* 未变，代码零改动。
+			加密只用 JDK 自带实现：token 与隧道载荷都是 AES-256-GCM（SunJCE），密钥派生走
+			PBKDF2-HMAC-SHA256 与 HKDF（均为 javax.crypto.Mac）。因此这里不再需要 Bouncy Castle
+			或 tink —— 历史上那套 shadowsocks 多算法实现（Camellia / SEED / Blowfish / ChaCha20 /
+			RC4-MD5）已随 CryptFactory 一起删除。
 		-->
-		<dependency>
-			<groupId>org.bouncycastle</groupId>
-			<artifactId>bcprov-jdk18on</artifactId>
-			<version>${bcprov.version}</version>
-		</dependency>
-		<!--
-			tink：钉在 1.18.0 —— 这是最后一个 Java 8 字节码的版本（class major 52）；1.19.0 起
-			pom 的 java.version 改成 11，会直接破掉本项目的 source/target=1.8 与 release 8 编译校验。
-			1.18 的额外收益：
-			  · 不再依赖 org.json（旧 json-20180813.jar 就是从 tink 1.5.0 传进来的），改用 gson；
-			  · protobuf-java 从 3.11.1 升到 4.28.2（仍是 major 52），甩掉一批旧版 CVE。
-			实际传递依赖只有 protobuf-java / jsr305 / error_prone_annotations 三个，
-			google-http-client 不会进依赖树，所以 lib/ 里不会有 guava、httpclient、opencensus。
-		-->
-		<dependency>
-			<groupId>com.google.crypto.tink</groupId>
-			<artifactId>tink</artifactId>
-			<version>1.18.0</version>
-		</dependency>
 		<!--
 			日志：Netty 的 InternalLoggerFactory 探测顺序是 SLF4J → Log4J2 → JUL，
 			所以实际链路是 InternalLogger → slf4j-api → log4j-slf4j-impl → log4j-core。
