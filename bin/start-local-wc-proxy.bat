@@ -9,6 +9,14 @@ rem  OEM codepage (GBK on zh-CN); UTF-8 comments corrupt parsing.
 rem ============================================================
 setlocal EnableExtensions
 
+rem --- Resolve the search tool by ABSOLUTE path (see the long note in
+rem     stop-local-wc-proxy.bat): Git for Windows ships a GNU find.exe in
+rem     usr\bin, which wins over System32 whenever PATH is inherited from a
+rem     Git Bash / IDE shell. A bare "| find %PID%" then searches for a FILE
+rem     named "%PID%", exits 1, and the liveness check reads "process gone" -
+rem     here that would drop a live pidfile and start a second instance. ---
+set "FINDSTR=%SystemRoot%\System32\findstr.exe"
+
 rem --- Switch to the distribution root. Use %~dp0, not "cd ../":
 rem     "cd ../" depends on the caller's CWD and breaks on
 rem     double-click or when invoked from another directory. ---
@@ -72,7 +80,7 @@ if not defined PID goto :do_start
 rem --- if the recorded PID is still alive, refuse to start a second copy.
 rem     (cmd rejects "cmd | find ... && ( ... ) else ( ... )", so keep the
 rem     test and the branches flat.) ---
-tasklist /fi "PID eq %PID%" 2>nul | find "%PID%" >nul
+tasklist /fi "PID eq %PID%" 2>nul | "%FINDSTR%" /c:"%PID%" >nul
 if not errorlevel 1 (
     echo [ERROR] client already running ^(PID=%PID%^).
     echo         run stop-local-wc-proxy.bat first to restart.
@@ -127,7 +135,7 @@ rem     Give it a moment, then confirm it is still alive. ---
 echo Waiting for the client to come up ...
 ping -n 4 127.0.0.1 >nul 2>nul
 
-tasklist /fi "PID eq %PID%" 2>nul | find "%PID%" >nul
+tasklist /fi "PID eq %PID%" 2>nul | "%FINDSTR%" /c:"%PID%" >nul
 if errorlevel 1 (
     echo.
     echo [ERROR] the client exited right after startup ^(PID=%PID%^ is gone^).

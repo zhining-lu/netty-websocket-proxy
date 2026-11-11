@@ -7,6 +7,20 @@ rem  OEM codepage (GBK on zh-CN); UTF-8 comments corrupt parsing.
 rem ============================================================
 setlocal EnableExtensions
 
+rem --- Resolve the search tool by ABSOLUTE path, and never rely on a bare
+rem     "find" in a pipeline. Git for Windows puts its own usr\bin ahead of
+rem     System32 on PATH, and that directory ships a GNU find.exe, so when
+rem     this script is launched from a Git Bash / IDE environment that
+rem     inherits that PATH, "| find %PID%" becomes GNU find: it treats the
+rem     PID as a file name, prints "No such file or directory" and exits 1.
+rem     The exit code is the pipeline's exit code, so the script would
+rem     conclude the proxy is already gone and skip the taskkill.
+rem     (Microsoft's own find.exe is no better here: it demands that the
+rem     search string keeps its literal double quotes, which is exactly the
+rem     kind of thing that breaks as soon as the line is rewritten.)
+rem     findstr takes a plain literal string - use it, fully qualified. ---
+set "FINDSTR=%SystemRoot%\System32\findstr.exe"
+
 pushd "%~dp0.."
 if errorlevel 1 (
     echo [ERROR] cannot enter "%~dp0.."
@@ -25,7 +39,7 @@ rem     NOTE: cmd cannot combine "cmd && ( ... ) else ( ... )" - it fails
 rem     with "else was not expected at this time", so keep the two
 rem     branches flat and use goto. ---
 if not defined PID goto :try_orphans
-tasklist /fi "PID eq %PID%" 2>nul | find "%PID%" >nul
+tasklist /fi "PID eq %PID%" 2>nul | "%FINDSTR%" /c:"%PID%" >nul
 if errorlevel 1 (
     echo [INFO] PID %PID% is not running any more.
     del "%PIDFILE%" >nul 2>nul
