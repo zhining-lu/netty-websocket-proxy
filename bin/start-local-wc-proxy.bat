@@ -174,10 +174,55 @@ rem     pauses on that path, so the text stays readable.
 rem     No -WindowStyle here: javaw never creates a console window, and
 rem     WindowStyle needs UseShellExecute=true while the redirects force it
 rem     to false - asking for both is at best ignored, at worst an error. ---
+rem --- Remember where THIS run's log starts: its byte length AND the file's
+rem     identity (NTFS file ID). Both are needed, for different reasons.
+rem
+rem     Length: the health check only looks at this run's lines, and %%~zA is
+rem     empty for a file that does not exist yet, so it is checked - a missing
+rem     log means "offset 0", not "".
+rem
+rem     Identity: that offset is only valid while the very file it was measured
+rem     on is still in place, and log4j2.xml rolls this log daily
+rem     (TimeBasedTriggeringPolicy interval=1 modulate=true) and again at 50MB.
+rem     A roll renames the old file to sw-proxy-<date>.log.N and creates a NEW,
+rem     empty logs\sw-proxy.log. The offset then sits PAST the end of the new
+rem     file, "length - offset" is negative, the check reads nothing, never sees
+rem     "start success!" and reports status 1 - killing a healthy run.
+rem     Measured 2026-11-14: offset 543069, rolled file 709 bytes, 0 bytes read.
+rem
+rem     A length test alone almost catches that, and it stays as the cheap
+rem     fallback, but it has one hole: if yesterday's log was tiny (say 500
+rem     bytes) and today's file grows past 500 bytes before the first poll, the
+rem     length looks perfectly normal while the offset points into the middle of
+rem     a DIFFERENT file - and a "start success!" in the skipped part is never
+rem     seen. Comparing the file ID closes that hole exactly: a rolled file is a
+rem     different file, whatever its length has grown to.
+rem
+rem     fsutil file queryfileid returns the NTFS file ID (FileIndex). Rename
+rem     keeps it - verified 2026-11-14: sw-proxy.log -> sw-proxy-2026-11-13.log.1
+rem     kept its ID - while a file created under the same name gets a different
+rem     one. CreationTime must NOT be used for this: NTFS file system tunnelling
+rem     hands the OLD creation stamp to a file recreated under the same name, so
+rem     old and new file report the identical tick count (also verified that day).
+rem
+rem     fsutil prints localised text ("File ID is 0x..." on en-US), so the ID is
+rem     pulled out with a regex instead of a fixed field position. "-" means no
+rem     usable ID (FAT32/exFAT, no rights, query failed) and the health check
+rem     then falls back to the length rule alone rather than failing the launch.
+rem     One PowerShell call reads length and ID in the same pass and hands cmd a
+rem     pure-ASCII line: this file must stay ASCII-only because cmd.exe reads
+rem     .bat in the OEM codepage (GBK on zh-CN). ---
 set "LOGBEFORE=0"
-rem --- %%~zA is empty for a file that does not exist yet, so check it before
-rem     overwriting the 0 - a missing log must mean "offset 0", not "". ---
-for %%A in ("logs\sw-proxy.log") do if not "%%~zA"=="" set "LOGBEFORE=%%~zA"
+set "LOGID="
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$f=Get-Item 'logs\sw-proxy.log' -ErrorAction SilentlyContinue; if($f){ $i=(fsutil file queryfileid $f.FullName 2>$null) -join ' '; if($i -match '0x[0-9a-fA-F]+'){ $i=$matches[0] } else { $i='-' }; '{0} {1}' -f $f.Length, $i } else { '0 -' }" > "%TEMP%\swproxy-logbase.txt" 2>nul
+if exist "%TEMP%\swproxy-logbase.txt" (
+    for /f "usebackq tokens=1,2" %%A in ("%TEMP%\swproxy-logbase.txt") do (
+        set "LOGBEFORE=%%A"
+        set "LOGID=%%B"
+    )
+)
+del "%TEMP%\swproxy-logbase.txt" >nul 2>nul
+if "%LOGID%"=="-" set "LOGID="
 
 set "PID="
 rem --- remove any stale pidfile first: its presence is how the launch below
@@ -212,8 +257,19 @@ rem     dependency) the JVM stays alive and idle forever - a zombie. The old
 rem     check reported "started" for exactly that zombie.
 rem     Application.main only logs "start success!" once every port is bound,
 rem     so that line is the positive confirmation - but only the part of
-rem     logs\sw-proxy.log written by THIS run counts (the file is append-only
-rem     and shared by every restart, so %LOGBEFORE% above is the offset).
+rem     logs\sw-proxy.log written by THIS run counts (the file is shared by
+rem     every restart, so %LOGBEFORE% above is the offset).
+rem     That offset is only valid for the very file it was measured on, and
+rem     log4j2 rolls this log daily and at 50MB. So every poll compares the file
+rem     ID with %LOGID%: a different file means the offset is stale and the check
+rem     restarts at byte 0 - a freshly rolled file only holds this run's lines,
+rem     so reading it whole cannot surface yesterday's. The length test stays in
+rem     as the fallback for when no ID could be read (FAT32/exFAT) and as a cheap
+rem     check for a file truncated in place.
+rem     Do NOT add a timestamp filter on top "for safety": it would trade a
+rem     scenario that needs a human to copy an old log back into place for a
+rem     real false-negative path (clock stepped by NTP, log pattern changed ->
+rem     no match on a healthy run -> the kill this whole check must avoid).
 rem     The polling lives in one PowerShell call because it has to watch three
 rem     things at once; it reports back with a single status token:
 rem       0 = "start success!" seen        -> really up
@@ -230,7 +286,7 @@ rem     Those two are the same only by luck, and a mismatch means silently
 rem     reading some other file. ---
 echo Waiting for the client to come up ...
 set "HC="
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$d=$PWD.Path; $log=Join-Path $d 'logs\sw-proxy.log'; $err=Join-Path $d 'logs\local-jvm.err'; $off=%LOGBEFORE%; $r='1'; for($i=0; $i -lt 20; $i++){ if(-not (Get-Process -Id %PID% -ErrorAction SilentlyContinue)){ $r='2'; break }; $new=''; if(Test-Path $log){ $fs=[IO.File]::Open($log,'Open','Read','ReadWrite'); try{ $len=$fs.Length-$off; if($len -gt 0){ $fs.Position=$off; $buf=New-Object byte[] $len; $n=$fs.Read($buf,0,$len); $new=[System.Text.Encoding]::ASCII.GetString($buf,0,$n) } } finally{ $fs.Close() } }; if($new -match 'start success'){ $r='0'; break }; if((Test-Path $err) -and ((Get-Item $err).Length -gt 0)){ $r='3'; break }; Start-Sleep -Milliseconds 500 }; $r" > "%TEMP%\swproxy-hc.txt" 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$d=$PWD.Path; $log=Join-Path $d 'logs\sw-proxy.log'; $err=Join-Path $d 'logs\local-jvm.err'; $off=%LOGBEFORE%; $id='%LOGID%'; $r='1'; for($i=0; $i -lt 20; $i++){ if(-not (Get-Process -Id %PID% -ErrorAction SilentlyContinue)){ $r='2'; break }; $hit=$false; $fi=Get-Item $log -ErrorAction SilentlyContinue; if($fi){ if($id -ne ''){ $cur=(fsutil file queryfileid $log 2>$null) -join ' '; if($cur -match '0x[0-9a-fA-F]+'){ $cur=$matches[0] } else { $cur='' }; if($cur -ne '' -and $cur -ne $id){ $off=0 } }; if($fi.Length -lt $off){ $off=0 }; try{ $fs=[IO.File]::Open($log,'Open','Read','ReadWrite'); try{ $len=$fs.Length-$off; if($len -gt 0){ $fs.Position=$off; $buf=New-Object byte[] $len; $n=$fs.Read($buf,0,$len); $new=[System.Text.Encoding]::ASCII.GetString($buf,0,$n); if($new -match 'start success'){ $hit=$true } } } finally{ $fs.Close() } } catch { } }; if($hit){ $r='0'; break }; if((Test-Path $err) -and ((Get-Item $err).Length -gt 0)){ $r='3'; break }; Start-Sleep -Milliseconds 500 }; $r" > "%TEMP%\swproxy-hc.txt" 2>nul
 set /p HC=<"%TEMP%\swproxy-hc.txt"
 del "%TEMP%\swproxy-hc.txt" >nul 2>nul
 

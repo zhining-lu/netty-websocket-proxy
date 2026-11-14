@@ -132,12 +132,34 @@ printf '   log  : %s\n' "$LOG4J_LOG"
 printf '   boot : %s\n' "$BOOT_LOG"
 printf '\n'
 
-# Remember the log lengths so the health check only looks at this run's output
-# (both log files are append-only and shared between restarts).
+# Remember where this run's output starts, as BOTH a byte length and the file's
+# identity (inode). The length alone is not enough: log4j2.xml rolls
+# sw-proxy.log daily (TimeBasedTriggeringPolicy interval=1 modulate=true) and
+# again at 50MB, and a roll renames the old file away and creates a new, empty
+# one. The recorded length then points past the end of the new file, the health
+# check reads nothing at all, and a healthy run gets reported as "never bound".
+# A rolled file is a different inode, so the offset is dropped and the check
+# starts from byte 0 - correct by definition, because a fresh file only holds
+# this run's lines.
+file_id() {   # inode of an existing file; empty when it does not exist
+    [ -f "$1" ] || return 0
+    ls -di -- "$1" 2>/dev/null | awk '{print $1; exit}'
+}
+
 log_before=0
-[ -f "$BOOT_LOG" ] && log_before="$(wc -c < "$BOOT_LOG" 2>/dev/null | tr -d ' ' || echo 0)"
+log_before_id=""
+if [ -f "$BOOT_LOG" ]; then
+    log_before="$(wc -c < "$BOOT_LOG" 2>/dev/null | tr -d ' ')"
+    log_before_id="$(file_id "$BOOT_LOG")"
+fi
 sw_log_before=0
-[ -f "$LOG4J_LOG" ] && sw_log_before="$(wc -c < "$LOG4J_LOG" 2>/dev/null | tr -d ' ' || echo 0)"
+sw_log_before_id=""
+if [ -f "$LOG4J_LOG" ]; then
+    sw_log_before="$(wc -c < "$LOG4J_LOG" 2>/dev/null | tr -d ' ')"
+    sw_log_before_id="$(file_id "$LOG4J_LOG")"
+fi
+log_before="${log_before:-0}"
+sw_log_before="${sw_log_before:-0}"
 
 # stdout/stderr must NOT go to /dev/null: when log4j2.xml is missing from the
 # classpath the JVM exits silently, and the old script still reported success.
@@ -153,18 +175,27 @@ printf '%s\n' "$PID" > "$PIDFILE"
 #     leaves the JVM alive and idle forever - the old script happily reported
 #     "started" for exactly that zombie. So require positive confirmation:
 #     Application.main logs "start success!" only after every port is bound.
-this_run() {   # $1 = file, $2 = byte offset before the launch
+this_run() {   # $1 = file, $2 = byte offset before the launch, $3 = inode then
     [ -f "$1" ] || return 1
-    tail -c +$(( $2 + 1 )) "$1" 2>/dev/null
+    _off="$2"
+    # The offset only means something for the very file it was measured on.
+    # A daily/size roll swaps the file underneath us: different inode -> the
+    # offset is stale, so read from the beginning of the new file.
+    if [ -n "${3:-}" ] && [ "$(file_id "$1")" != "$3" ]; then
+        _off=0
+    fi
+    _size="$(wc -c < "$1" 2>/dev/null | tr -d ' ')"
+    [ "${_size:-0}" -lt "$_off" ] && _off=0     # truncated in place
+    tail -c +$(( _off + 1 )) "$1" 2>/dev/null
 }
 
 boot_failed() {
-    this_run "$BOOT_LOG" "$log_before" \
+    this_run "$BOOT_LOG" "$log_before" "$log_before_id" \
         | grep -qE 'Exception in thread|BindException|ClassNotFoundException|NoClassDefFoundError|UnrecognizedOption'
 }
 
 logged_start_success() {
-    this_run "$LOG4J_LOG" "$sw_log_before" | grep -q 'start success'
+    this_run "$LOG4J_LOG" "$sw_log_before" "$sw_log_before_id" | grep -q 'start success'
 }
 
 started=0
@@ -197,12 +228,12 @@ if [ "$started" -ne 1 ]; then
     # Show the headline line ("java.net.BindException: ..."), not the middle of
     # a 30-frame stack trace - the tail is unreadable and hides the cause.
     cause=""
-    this_run "$BOOT_LOG" "$log_before" | grep -q . \
-        && cause="$(this_run "$BOOT_LOG" "$log_before" \
+    this_run "$BOOT_LOG" "$log_before" "$log_before_id" | grep -q . \
+        && cause="$(this_run "$BOOT_LOG" "$log_before" "$log_before_id" \
                     | grep -E 'Exception|Error|error:' | head -n 5)"
     if [ -z "$cause" ]; then
-        this_run "$LOG4J_LOG" "$sw_log_before" | grep -q . \
-            && cause="$(this_run "$LOG4J_LOG" "$sw_log_before" \
+        this_run "$LOG4J_LOG" "$sw_log_before" "$sw_log_before_id" | grep -q . \
+            && cause="$(this_run "$LOG4J_LOG" "$sw_log_before" "$sw_log_before_id" \
                         | grep -E 'ERROR|Exception|Error' | head -n 5)"
     fi
     if [ -n "$cause" ]; then
